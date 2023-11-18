@@ -6,30 +6,32 @@ import json
 import rasterio
 from rasterio.mask import mask
 from rasterio.windows import from_bounds
+from rasterio.enums import Resampling
 import geopandas as gpd
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.feature_selection import RFE
 from sklearn.linear_model import LogisticRegression
+import pandas as pd
 
 
-def processRGB(r_path, g_path, b_path):
+def processRGB(RGB_Path):
     """
     Perform operations on provided R, G, B TIFF files and save the results as new TIFF files.
     Operations: MEGI, Hue, Saturation, and normalized r, g, b.
 
     MEGI operation: If (g < b OR g < r, 0, 2*g - r - b)
-    Hue operation: W = cos-1[{2R-(G+B)}/2{(R-G)²+(R-B)(G-B)}^1/2]; Hue = W if B ≤ G, otherwise 2π-W
+    EGI operation: 3*g-1
     Saturation operation: 1 - min(r, g, b)
 
     Parameters:
-    r_path (str): File path to the Red channel TIFF file.
-    g_path (str): File path to the Green channel TIFF file.
-    b_path (str): File path to the Blue channel TIFF file.
+    RGB_path (list): a list of File paths to the Red, green, and blue channels of the TIFF file.
+        Order is important: [R, G, B]
+
     """
     # Open the raster files
-    r_dataset = gdal.Open(r_path)
-    g_dataset = gdal.Open(g_path)
-    b_dataset = gdal.Open(b_path)
+    r_dataset = gdal.Open(RGB_Path[0])
+    g_dataset = gdal.Open(RGB_Path[1])
+    b_dataset = gdal.Open(RGB_Path[2])
 
     if not r_dataset or not g_dataset or not b_dataset:
         print("Failed to open one or more files")
@@ -54,14 +56,23 @@ def processRGB(r_path, g_path, b_path):
     Saturation_array = 1 - np.min(np.array([r_array, g_array, b_array]), axis=0)
 
     # Save MEGI, Hue, Saturation, and normalized r, g, b arrays as TIFF files
-    output_base = os.path.dirname(r_path)
-    save_raster(MEGI_array, r_dataset, os.path.join(output_base, 'MEGI.tif'))
-    save_raster(EGI_array, r_dataset, os.path.join(output_base, 'Hue.tif'))
-    save_raster(Saturation_array, r_dataset, os.path.join(output_base, 'Saturation.tif'))
-    save_raster(r_array, r_dataset, os.path.join(output_base, 'r_normalized.tif'))
-    save_raster(g_array, r_dataset, os.path.join(output_base, 'g_normalized.tif'))
-    save_raster(b_array, r_dataset, os.path.join(output_base, 'b_normalized.tif'))
+    output_base = os.path.dirname(RGB_Path[0])
+    
+    # Create a dictionary of named arrays
+    named_arrays = {
+        'MEGI': MEGI_array,
+        'EGI': EGI_array,
+        'Saturation': Saturation_array,
+        'r_normalized': r_array,
+        'g_normalized': g_array,
+        'b_normalized': b_array
+    }
 
+    # Call the modified save_rasters function
+    saved_files = save_rasters(named_arrays, r_dataset, output_base)
+    print(saved_files)
+    return saved_files
+    
 def standardize_rasters(raster_paths):
     """
     Normalize a list of rasters using the formula (x - x_mean) / x_stdev.
@@ -69,6 +80,7 @@ def standardize_rasters(raster_paths):
     Parameters:
     raster_paths (list of str): List of file paths to the raster files.
     """
+    norm_rasters = []
     for raster_path in raster_paths:
         with rasterio.open(raster_path) as src:
             # Read raster data as floating point values
@@ -94,6 +106,9 @@ def standardize_rasters(raster_paths):
                 dest.write(normalized_data, 1)
 
             print(f"Normalized raster saved to {normalized_raster_path}")
+            norm_rasters.append(normalized_raster_path)
+            
+    return norm_rasters
 
 def perform_discriminant_analysis(dependent_rasters, independent_rasters):
     """
@@ -119,8 +134,10 @@ def perform_discriminant_analysis(dependent_rasters, independent_rasters):
         X_list.append(raster.read(1).flatten())
 
     X = np.column_stack(X_list)
-
-    # Train linear discriminant analysis model directly without RFE
+    #print the dimensions of X and y
+    print("X dimensions:", X.shape)
+    print("y dimensions:", y.shape)
+    
     lda = LinearDiscriminantAnalysis()
     model = lda.fit(X, y)
 
@@ -182,6 +199,11 @@ def apply_LDA(input_rasters, lda_params):
     coefficients = lda_params['coefficients'][0]
     intercept = lda_params['intercept'][0]
 
+    print("Number of rasters:", len(input_rasters))
+    print("Number of coefficients:", len(coefficients))
+
+    for raster_path, coeff in zip(input_rasters, coefficients):
+        print("Raster:", raster_path, "Coefficient:", coeff)
     print("entered LDA")
     # Initialize an array to store LDA scores and profile
     with rasterio.open(input_rasters[0]) as src:
@@ -202,7 +224,7 @@ def apply_LDA(input_rasters, lda_params):
     os.makedirs(results_dir, exist_ok=True)
 
     # Output file path
-    output_raster_path = os.path.join(results_dir, 'lda_scores.tif')
+    output_raster_path = os.path.join(results_dir, 'lda_scores_v1.tif')
 
     # Adjust the profile for the output raster
     profile.update(dtype=rasterio.float32, count=1, compress='lzw')
@@ -223,6 +245,7 @@ def clip_rasters_by_extent(target_raster_paths, template_raster_path):
     with rasterio.open(template_raster_path) as template_raster:
         template_bounds = template_raster.bounds
 
+    clip_rasters =[]
     # Process each target raster
     for target_raster_path in target_raster_paths:
         with rasterio.open(target_raster_path) as target_raster:
@@ -252,6 +275,8 @@ def clip_rasters_by_extent(target_raster_paths, template_raster_path):
                 dest.write(clipped_array, 1)
 
             print(f"Clipped raster saved to {output_path}")
+            clip_rasters.append(output_path)
+    return clip_rasters
 
 def mask_rasters_by_shapefile(raster_paths, shapefile_path, layer_name):
     """
@@ -289,73 +314,221 @@ def mask_rasters_by_shapefile(raster_paths, shapefile_path, layer_name):
 
             print(f"Masked raster saved to {masked_raster_path}")
 
-def save_raster(array, template_dataset, output_path):
+def save_rasters(named_arrays, template_dataset, output_folder):
     """
-    Save a numpy array as a TIFF file using a template dataset for geospatial information.
+    Save multiple numpy arrays as TIFF files using a template dataset for geospatial information,
+    with each file named according to a provided dictionary.
 
     Parameters:
-    array (np.array): The numpy array to save.
+    named_arrays (dict): A dictionary where keys are file names and values are numpy arrays to save.
     template_dataset: The GDAL dataset to use as a template for geospatial information.
-    output_path (str): The path to save the output file.
+    output_folder (str): The folder to save the output files.
     """
+    # Create the output folder if it doesn't exist
+
+    print(output_folder)
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+
     driver = gdal.GetDriverByName('GTiff')
-    out_dataset = driver.Create(output_path, 
-                                template_dataset.RasterXSize, 
-                                template_dataset.RasterYSize, 
-                                1, 
-                                gdal.GDT_Float32)
-    out_dataset.SetGeoTransform(template_dataset.GetGeoTransform())
-    out_dataset.SetProjection(template_dataset.GetProjection())
+    saved_file_paths = []
 
-    out_band = out_dataset.GetRasterBand(1)
-    out_band.WriteArray(array)
+    for name, array in named_arrays.items():
+        output_path = os.path.join(output_folder, f'{name}.tif')
+        out_dataset = driver.Create(output_path, 
+                                    template_dataset.RasterXSize, 
+                                    template_dataset.RasterYSize, 
+                                    1, 
+                                    gdal.GDT_Float32)
+        out_dataset.SetGeoTransform(template_dataset.GetGeoTransform())
+        out_dataset.SetProjection(template_dataset.GetProjection())
 
-    out_band.FlushCache()
-    out_dataset = None
+        out_band = out_dataset.GetRasterBand(1)
+        out_band.WriteArray(array)
+
+        out_band.FlushCache()
+        out_dataset = None
+
+        saved_file_paths.append(output_path)
+
+    return saved_file_paths
     
+def clip_rasters_smallest(raster_paths):
+    """
+    Clip a list of rasters by the most limited extent of any individual raster in the list, save the results,
+    and return an array containing each raster's new clipped extent.
+
+    Parameters:
+    raster_paths (list of str): List of file paths to the rasters to be clipped.
+    """
+    # Initialize variables to store the most limited extent
+    min_left, min_bottom, max_right, max_top = np.inf, np.inf, -np.inf, -np.inf
+
+    # Determine the most limited extent among all rasters
+    for raster_path in raster_paths:
+        with rasterio.open(raster_path) as raster:
+            bounds = raster.bounds
+            min_left = min(min_left, bounds.left)
+            min_bottom = min(min_bottom, bounds.bottom)
+            max_right = max(max_right, bounds.right)
+            max_top = max(max_top, bounds.top)
+
+    limited_extent = (min_left, min_bottom, max_right, max_top)
+
+    clipped_rasters = []
+    clipped_extents = []
+    # Process each raster
+    for raster_path in raster_paths:
+        with rasterio.open(raster_path) as raster:
+            # Calculate the window position and size based on the most limited extent
+            window = from_bounds(*limited_extent, raster.transform)
+
+            # Read the data from this window
+            clipped_array = raster.read(window=window)
+
+            # Check if the clipped array has an extra dimension and remove it if present
+            if clipped_array.ndim == 3 and clipped_array.shape[0] == 1:
+                clipped_array = clipped_array.squeeze()
+
+            # Update metadata for the clipped raster
+            out_meta = raster.meta.copy()
+            new_transform = rasterio.windows.transform(window, raster.transform)
+            out_meta.update({
+                "height": clipped_array.shape[0],
+                "width": clipped_array.shape[1],
+                "transform": new_transform
+            })
+
+            # Calculate new bounds for the clipped raster
+            new_bounds = rasterio.windows.bounds(window, raster.transform)
+            clipped_extents.append(new_bounds)
+
+            # Generate the output path
+            output_path = raster_path.replace('.tif', '_clipped.tif')
+
+            # Save the clipped raster
+            with rasterio.open(output_path, "w", **out_meta) as dest:
+                dest.write(clipped_array, 1)
+
+            print(f"Clipped raster saved to {output_path}")
+            clipped_rasters.append(output_path)
+
+    return clipped_rasters, clipped_extents
+
+import rasterio
+from rasterio.warp import calculate_default_transform, reproject, Resampling
+
+def resample_rasters(raster_paths, output_folder):
+    """
+    Resample a list of rasters to the resolution of the smallest resolution raster and save the results.
+
+    Parameters:
+    raster_paths (list of str): List of file paths to the rasters to be resampled.
+    output_folder (str): The folder to save the resampled rasters.
+    """
+    # Determine the smallest resolution
+    smallest_resolution = float('inf')
+    for raster_path in raster_paths:
+        with rasterio.open(raster_path) as raster:
+            resolution = raster.res
+            smallest_resolution = min(smallest_resolution, max(resolution))
+
+    # Resample and align all rasters to the smallest resolution
+    resampled_rasters = []
+    for raster_path in raster_paths:
+        with rasterio.open(raster_path) as raster:
+            # Calculate the transform and dimensions for the new resolution
+            transform, width, height = calculate_default_transform(
+                raster.crs, raster.crs, raster.width, raster.height, *raster.bounds, 
+                dst_width=int(raster.width * raster.res[0] / smallest_resolution),
+                dst_height=int(raster.height * raster.res[1] / smallest_resolution)
+            )
+            new_profile = raster.profile.copy()
+            new_profile.update({
+                'transform': transform,
+                'width': width,
+                'height': height
+            })
+
+            # Resample the raster
+            resampled_data = raster.read(
+                out_shape=(raster.count, height, width),
+                resampling=Resampling.nearest
+            )
+
+            # Save the resampled raster
+            output_path = os.path.join(output_folder, os.path.basename(raster_path).replace('.tif', '_resampled.tif'))
+            with rasterio.open(output_path, 'w', **new_profile) as dest:
+                dest.write(resampled_data)
+
+            resampled_rasters.append(output_path)
+
+    return resampled_rasters
+
+RGB = [r"M:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Training_Set\Inputs\R.tif", 
+       r"M:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Training_Set\Inputs\G.tif",
+       r"M:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Training_Set\Inputs\B.tif"]
 
 
-
-B = r"M:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Test_Set\Inputs\B.tif"
-G = r"M:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Test_Set\Inputs\G.tif"
-R = r"M:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Test_Set\Inputs\R.tif"
-
-
-
-raster_paths = [r"M:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Test_Set\Inputs\B.tif",
-r"M:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Test_Set\Inputs\b_normalized.tif",
-r"M:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Test_Set\Inputs\G.tif",
-r"M:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Test_Set\Inputs\g_normalized.tif",
-r"M:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Test_Set\Inputs\Hue.tif",
-r"M:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Test_Set\Inputs\MEGI.tif",
-r"M:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Test_Set\Inputs\R.tif",
-r"M:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Test_Set\Inputs\r_normalized.tif",
-r"M:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Test_Set\Inputs\Saturation.tif"]
 
 shapefile_path = r"M:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\multi-test\Test_output\Test_Set\VEG_Test_Layer.gpkg"
 layer_name = 'vegetation_test_layer'
 raster_path = [r"M:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Test_Set\Inputs\matched_extents\B_normalized_clipped.tif"]
 
-dependent_rasters = [r"M:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Test_Set\Test_Key\VEG-BE_Raster_Key_clipped.tif"]
-
-independent_rasters = [r"M:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Test_Set\Inputs\matched_extents\B_normalized_clipped.tif",
-r"M:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Test_Set\Inputs\matched_extents\b_normalized_normalized_clipped.tif",
-r"M:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Test_Set\Inputs\matched_extents\G_normalized_clipped.tif",
-r"M:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Test_Set\Inputs\matched_extents\g_normalized_normalized_clipped.tif",
-r"M:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Test_Set\Inputs\matched_extents\Hue_normalized_clipped.tif",
-r"M:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Test_Set\Inputs\matched_extents\MEGI_normalized_clipped.tif",
-r"M:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Test_Set\Inputs\matched_extents\R_normalized_clipped.tif",
-r"M:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Test_Set\Inputs\matched_extents\r_normalized_normalized_clipped.tif",
-r"M:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Test_Set\Inputs\matched_extents\Saturation_normalized_clipped.tif"]
-
-target_raster_paths = [r"M:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Test_Set\Test_Key\VEG-BE_Raster_Key.tif"]
-template_raster_path = r"M:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Test_Set\Inputs\matched_extents\B_normalized_clipped.tif"
+dependent_rasters = [r"M:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Training_Set\Test_Key\VEG-BE_Raster_Key.tif"]
 
 
-#processRGB(R, G, B)
-#standardize_rasters(raster_paths)
-#clip_rasters_by_extent(target_raster_paths, template_raster_path)
+additional_rasters = [r"M:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Training_Set\Inputs\matched_extents\Roughness_1.77cm.tif",
+                      r"M:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Training_Set\Inputs\matched_extents\DEM_1.77cm.tif"]
+
+#Parameters form model without elevation data
+parameters = {
+    'coefficients': np.array([[-0.345932, -0.34592852, -4.84926, -4.849266, -0.35379028, 
+                               1.6872948, 5.3533583, 5.3533583, -0.68683696]], dtype=np.float32),
+    'intercept': np.array([-2.8671293], dtype=np.float32),
+    'means': np.array([[-0.01192813, -0.01192813, 0.0123111, 0.0123111, 0.11243419, 
+                        0.07813703, -0.02462679, -0.02462679, 0.02867936], 
+                       [0.0888283, 0.0888283, -0.08303151, -0.08303151, -0.79767877, 
+                        -0.5572977, 0.17782454, 0.17782454, -0.20720176]], dtype=np.float32),
+    'priors': np.array([0.8757065, 0.12429348], dtype=np.float32),
+    'scalings': np.array([[0.22171496], [0.22171272], [3.10799062], [3.10799452], 
+                          [0.22675149], [-1.08142204], [-3.43107767], [-3.43107775], 
+                          [0.44020797]], dtype=np.float32),
+    'explained_variance_ratio': np.array([1.], dtype=np.float32)
+}
+
+output_folder = r"M:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Training_Set\Inputs\matched_extents\matched_rez"
+
+
+
+saved_paths = processRGB(RGB)
+#saved_paths.extend(additional_rasters)
+#saved_paths_resampled = resample_rasters(saved_paths, output_folder)
+clip_dependent = clip_rasters_by_extent(dependent_rasters, saved_paths[0])
+#clip_independent = clip_rasters_by_extent(saved_paths_resampled, saved_paths_resampled[0])
+#saved_paths_clipped, listp = clip_rasters_smallest(saved_paths_resampled)
+norm_rasters = standardize_rasters(saved_paths)
+
+
 #mask_rasters_by_shapefile(independent_rasters, shapefile_path, layer_name)
-model, parameters = perform_discriminant_analysis(dependent_rasters, independent_rasters)
+model, parameters = perform_discriminant_analysis(clip_dependent, norm_rasters)
 print(parameters)
-apply_LDA(independent_rasters, parameters)
+
+
+
+#uncomment if you want to run parameters from model on a different set than training
+RGB = [r"M:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Test_Set_v2\inputs\R.tif",
+        r"M:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Test_Set_v2\inputs\G.tif",
+        r"M:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Test_Set_v2\inputs\B.tif"]
+
+
+#additional_rasters = [r"M:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Test_Set_v2\inputs\DEM.tif",
+                      #  r"M:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Test_Set_v2\inputs\Roughness.tif"]
+
+saved_paths = processRGB(RGB)
+#saved_paths.extend(additional_rasters)
+norm_rasters = standardize_rasters(saved_paths)
+
+
+
+apply_LDA(norm_rasters, parameters)
