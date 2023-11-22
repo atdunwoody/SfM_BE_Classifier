@@ -55,7 +55,7 @@ def train_RF(raster_paths, shapefile_path):
     # Encode labels
     label_encoder = LabelEncoder()
     encoded_labels = label_encoder.fit_transform(labels)
-
+    print(labels[:10], encoded_labels[:10])
     # Split Data
     X_train, X_test, y_train, y_test = train_test_split(features, encoded_labels, test_size=0.2, random_state=42)
 
@@ -83,70 +83,98 @@ def train_RF(raster_paths, shapefile_path):
 
     print("Best Estimator:", best_estimator)
     print("Best Score:", best_score)
+    max_length = max([len(feature) for feature in features])
+    
+    return best_estimator, best_score, performance_metrics, max_length
 
-    return best_estimator, best_score, performance_metrics
+def read_and_stack_rasters(raster_paths):
+    """ Read and stack multiple rasters into a single array. """
+    with rasterio.open(raster_paths[0]) as src0:
+        meta = src0.meta.copy()
+        stacked_array = np.zeros((len(raster_paths), src0.height, src0.width), dtype=src0.dtypes[0])
 
-def classify_large_raster(raster_paths, model, window_size=1):
+    for i, path in enumerate(raster_paths):
+        with rasterio.open(path) as src:
+            stacked_array[i, :, :] = src.read(1)
+
+    meta.update(count=len(raster_paths))
+    return stacked_array, meta
+
+def reshape_for_prediction(tile_data, max_length):
+    """ Reshape and pad the tile data for prediction. Adjust this logic as per your classifier's input requirements. """
+    reshaped = tile_data.reshape(-1)
+    if len(reshaped) < max_length:
+        return np.pad(reshaped, (0, max_length - len(reshaped)))
+    else:
+        return reshaped[:max_length]
+
+def classify_large_raster(raster_paths, classifier, max_length, tile_size=256, n_jobs=-1):
     """
-    Classify a large raster using the provided Random Forest model and save output in 'RF_Output' folder.
+    Apply a trained Random Forest classifier to multiple rasters using a tiling approach.
 
-    Parameters:
-    raster_paths (list of str): List of file paths to the raster files.
-    model (RandomForestClassifier): Trained Random Forest model.
-    window_size (int): Size of the window to process at a time. Default is 1 (each pixel).
+    :param raster_paths: List of paths to the raster files (R, G, B).
+    :param classifier: Trained RandomForestClassifier.
+    :param max_length: The maximum length of the feature vectors as used in training.
+    :param tile_size: Size of the tiles to split the raster into. Default is 256.
+    :param n_jobs: Number of jobs for parallel processing. Default is -1 (use all processors).
+    :return: Classified raster as a 2D numpy array.
     """
-    # Determine the base folder from the first raster path
-    base_folder = os.path.dirname(raster_paths[0])
-    output_folder = os.path.join(base_folder, 'RF_Output')
 
-    # Create the output folder if it doesn't exist
-    if not os.path.exists(output_folder):
-        os.makedirs(output_folder)
+    def classify_tile(data, window, max_length, tile_size, classifier):
+    
+        window_height = min(tile_size, data.shape[1] - window[0])
+        window_width = min(tile_size, data.shape[2] - window[1])
 
-    # Output file path
-    output_file = os.path.join(output_folder, 'classified_output.tif')
+        # Initialize an array to hold the classification results
+        classified_tile = np.zeros((window_height, window_width), dtype=np.uint8)
 
-    # Open the first raster to get the metadata and initialize the result array
-    with rasterio.open(raster_paths[0]) as src:
-        meta = src.meta.copy()
-        result = np.zeros((src.height, src.width), dtype=int)
+        for i in range(window_height):
+            for j in range(window_width):
+                # Extract the data for the current pixel
+                pixel_data = data[:, window[0]+i, window[1]+j]
 
-    # Iterate over the raster in windows
-    for i in range(0, meta['height'], window_size):
-        for j in range(0, meta['width'], window_size):
-            window_data = []
-            for path in raster_paths:
-                with rasterio.open(path) as src:
-                    # Define the window
-                    window = Window(j, i, window_size, window_size)
-                    # Read data from the window and flatten
-                    data = src.read(window=window).flatten()
-                    window_data.extend(data)
+                # Reshape and prepare pixel data as per the classifier's requirement
+                pixel_data_reshaped = reshape_for_prediction(pixel_data, max_length)
 
-            # Reshape window_data for prediction
-            window_data = np.array(window_data).reshape(1, -1)
+                # Predict the class for the current pixel
+                prediction = classifier.predict(pixel_data_reshaped.reshape(1, -1))
 
-            # Check if the window_data has the same number of features as the model expects
-            if window_data.shape[1] == model.n_features_in_:
-                prediction = model.predict(window_data)
-                # Assign prediction to result raster
-                result[i:i+window_size, j:j+window_size] = prediction.reshape(window_size, window_size)
-            else:
-                # Handle windows that do not match the model's expected feature size
-                # e.g., by assigning a default class or skipping them
-                pass
+                # Assign the prediction to the classified tile
+                classified_tile[i, j] = prediction
 
-    # Update metadata for the result raster
-    meta.update({'count': 1})
+        return classified_tile
 
-    # Write result to a new raster file in the 'RF_Output' folder
-    with rasterio.open(output_file, 'w', **meta) as dst:
-        dst.write(result, 1)
 
-    return output_file
+    stacked_data, meta = read_and_stack_rasters(raster_paths)
 
-# Usage Example
+    # Create a list of window positions covering the entire image with specified tile size
+    windows = [(row, col) for col in range(0, meta['width'], tile_size) 
+               for row in range(0, meta['height'], tile_size)]
 
+    # Use parallel processing to classify each tile
+    classified_tiles = Parallel(n_jobs=n_jobs)(
+        delayed(classify_tile)(stacked_data, window, max_length, tile_size, classifier) for window in windows)
+
+    # Stitch the classified tiles back together
+    classified_raster = np.zeros((meta['height'], meta['width']), dtype=np.uint8)
+    for idx, (row_start, col_start) in enumerate(windows):
+        row_end = min(row_start + tile_size, meta['height'])
+        col_end = min(col_start + tile_size, meta['width'])
+        tile_size_y, tile_size_x = classified_tiles[idx].shape
+        classified_raster[row_start:row_start+tile_size_y, col_start:col_start+tile_size_x] = classified_tiles[idx]
+
+    
+    base_dir = os.path.dirname(raster_paths[0])
+    output_dir = os.path.join(base_dir, 'RF_Output')
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
+    # Save the classified raster
+    output_file_path = os.path.join(output_dir, 'classified_raster.tif')
+    with rasterio.open(output_file_path, 'w', **meta) as dst:
+        dst.write(classified_raster, 1)
+
+    return classified_raster
 
 
 # List of raster file paths
@@ -159,11 +187,15 @@ rasters = [read_raster(path) for path in raster_paths]
 shapefile = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Test_Train_Set\VEG_BE_KEY.shp"
 
 
+test_rasters = [r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Test_Train_Set\Test_v1\R.tif",
+r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Test_Train_Set\Test_v1\G.tif",
+r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Test_Train_Set\Test_v1\B.tif"]
 
 # Extract features and raster outputs
-best_model, best_score, performance_metrics = train_RF(raster_paths, shapefile)
+best_model, best_score, performance_metrics, max_length = train_RF(raster_paths, shapefile)
 
-new_raster_predictions = classify_large_raster(raster_paths, best_model)
+new_raster_predictions = classify_large_raster(raster_paths, best_model, max_length)
+
 print(f"New raster predictions: {new_raster_predictions}")
 
 print(f"Best model parameters: {best_model.get_params()}")
