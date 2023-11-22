@@ -1,13 +1,17 @@
 import rasterio
+from rasterio.windows import Window
+from rasterio.mask import mask
 import geopandas as gpd
+
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split, RandomizedSearchCV
 from sklearn.metrics import classification_report
-from rasterio.mask import mask
-import numpy as np
 from sklearn.preprocessing import LabelEncoder
+
+import numpy as np
 import os
 from osgeo import gdal
+from joblib import Parallel, delayed
 
 
 def read_raster(file_path):
@@ -82,41 +86,73 @@ def train_RF(raster_paths, shapefile_path):
 
     return best_estimator, best_score, performance_metrics
 
-def classify_new_rasters_without_shapefile(raster_paths, model):
+def classify_large_raster(raster_paths, model, window_size=1):
     """
-    Classify a set of rasters using the provided Random Forest model without using a shapefile.
+    Classify a large raster using the provided Random Forest model and save output in 'RF_Output' folder.
 
     Parameters:
     raster_paths (list of str): List of file paths to the raster files.
     model (RandomForestClassifier): Trained Random Forest model.
+    window_size (int): Size of the window to process at a time. Default is 1 (each pixel).
     """
-    features = []
+    # Determine the base folder from the first raster path
+    base_folder = os.path.dirname(raster_paths[0])
+    output_folder = os.path.join(base_folder, 'RF_Output')
 
-    for path in raster_paths:
-        with rasterio.open(path) as src:
-            raster_data = src.read()  # Read the entire raster data
-            raster_flattened = raster_data.reshape(-1)  # Flatten the raster data
-            features.append(raster_flattened)
+    # Create the output folder if it doesn't exist
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
 
-    # Data Preparation: Reshape features (as done in training)
-    max_length = max([len(feature) for feature in features])
-    features = [np.pad(feature, (0, max_length - len(feature))) if len(feature) < max_length else feature[:max_length] for feature in features]
+    # Output file path
+    output_file = os.path.join(output_folder, 'classified_output.tif')
 
-    # Use the trained model to make predictions
-    predictions = model.predict(features)
+    # Open the first raster to get the metadata and initialize the result array
+    with rasterio.open(raster_paths[0]) as src:
+        meta = src.meta.copy()
+        result = np.zeros((src.height, src.width), dtype=int)
 
-    return predictions
+    # Iterate over the raster in windows
+    for i in range(0, meta['height'], window_size):
+        for j in range(0, meta['width'], window_size):
+            window_data = []
+            for path in raster_paths:
+                with rasterio.open(path) as src:
+                    # Define the window
+                    window = Window(j, i, window_size, window_size)
+                    # Read data from the window and flatten
+                    data = src.read(window=window).flatten()
+                    window_data.extend(data)
+
+            # Reshape window_data for prediction
+            window_data = np.array(window_data).reshape(1, -1)
+
+            # Check if the window_data has the same number of features as the model expects
+            if window_data.shape[1] == model.n_features_in_:
+                prediction = model.predict(window_data)
+                # Assign prediction to result raster
+                result[i:i+window_size, j:j+window_size] = prediction.reshape(window_size, window_size)
+            else:
+                # Handle windows that do not match the model's expected feature size
+                # e.g., by assigning a default class or skipping them
+                pass
+
+    # Update metadata for the result raster
+    meta.update({'count': 1})
+
+    # Write result to a new raster file in the 'RF_Output' folder
+    with rasterio.open(output_file, 'w', **meta) as dst:
+        dst.write(result, 1)
+
+    return output_file
 
 # Usage Example
-
-# Assuming best_model is the trained Random Forest model
 
 
 
 # List of raster file paths
 raster_paths = [r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Test_Train_Set\Input_Layers\R.tif",
 r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Test_Train_Set\Input_Layers\G.tif",
-r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Test_Train_Set\Input_Layers\B.tif",]
+r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Test_Train_Set\Input_Layers\B.tif"]
 
 # Read rasters and shapefile
 rasters = [read_raster(path) for path in raster_paths]
@@ -127,7 +163,8 @@ shapefile = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering T
 # Extract features and raster outputs
 best_model, best_score, performance_metrics = train_RF(raster_paths, shapefile)
 
-new_raster_predictions = classify_new_rasters_without_shapefile(raster_paths, best_model)
+new_raster_predictions = classify_large_raster(raster_paths, best_model)
+print(f"New raster predictions: {new_raster_predictions}")
 
 print(f"Best model parameters: {best_model.get_params()}")
 print(f"Best model accuracy: {best_score}")
