@@ -1,0 +1,77 @@
+import rasterio
+import geopandas as gpd
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split, RandomizedSearchCV
+from sklearn.metrics import classification_report
+from rasterio.mask import mask
+
+def read_raster(file_path):
+    with rasterio.open(file_path) as src:
+        return src.read(), src.transform
+
+def extract_features(rasters, shapefile):
+    features = []
+    labels = []
+    raster_outputs = []  # Store raster outputs
+
+    for raster, transform in rasters:
+        for index, row in shapefile.iterrows():
+            out_image, out_transform = mask(raster, [row['geometry']], crop=True)
+            out_image = out_image.reshape(-1)  # Flatten the array
+            features.append(out_image)
+            labels.append(row['label'])  # Assuming a 'label' field in your shapefile
+            raster_outputs.append(out_image)  # Store raster output
+
+    return features, labels, raster_outputs
+
+def perform_random_search(features, labels):
+    parameter_distributions = {
+        'n_estimators': [100, 200, 300],
+        'max_depth': [None, 10, 20, 30],
+        'min_samples_split': [2, 5, 10],
+        'min_samples_leaf': [1, 2, 4]
+    }
+
+    rf = RandomForestClassifier(random_state=42)
+    random_search = RandomizedSearchCV(estimator=rf, param_distributions=parameter_distributions, 
+                                       n_iter=10, cv=3, n_jobs=-1, verbose=2, random_state=42)
+    random_search.fit(features, labels)
+    
+    # Get performance metrics for each model
+    performance_metrics = random_search.cv_results_
+    
+    return random_search.best_estimator_, random_search.best_score_, performance_metrics
+
+# List of raster file paths
+raster_paths = [r"M:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Test_Train_Set\Input_Layers\R.tif",
+r"M:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Test_Train_Set\Input_Layers\G.tif",
+r"M:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Test_Train_Set\Input_Layers\B.tif",]
+
+# Read rasters and shapefile
+rasters = [read_raster(path) for path in raster_paths]
+shapefile = gpd.read_file(r"M:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Test_Train_Set\VEG_BE_KEY.shp")
+
+# Extract features and raster outputs
+features, labels, raster_outputs = extract_features(rasters, shapefile)
+
+print("Features: " + features)
+print("Lbakles: " + labels)
+print("Raster_ouytputs: " + raster_outputs)
+
+
+"""
+# Perform random search for hyperparameter tuning
+best_model, best_score, performance_metrics = perform_random_search(features, labels)
+print(f"Best model parameters: {best_model.get_params()}")
+print(f"Best model accuracy: {best_score}")
+
+# Accessing performance metrics
+for metric in performance_metrics:
+    print(metric, performance_metrics[metric])
+
+# Accessing the best classifier
+print("Best classifier:", best_model)
+
+# Accessing raster outputs
+print("Raster outputs:", raster_outputs)
+"""
