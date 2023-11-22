@@ -6,6 +6,8 @@ from sklearn.metrics import classification_report
 from rasterio.mask import mask
 import numpy as np
 from sklearn.preprocessing import LabelEncoder
+import os
+from osgeo import gdal
 
 
 def read_raster(file_path):
@@ -51,19 +53,19 @@ def train_RF(raster_paths, shapefile_path):
     encoded_labels = label_encoder.fit_transform(labels)
 
     # Split Data
-    X_train, X_test, y_train, y_test = train_test_split(features, encoded_labels, test_size=0.3, random_state=42)
+    X_train, X_test, y_train, y_test = train_test_split(features, encoded_labels, test_size=0.2, random_state=42)
 
     # Random Forest Training
     parameter_distributions = {
-        'n_estimators': [100, 200, 300],
-        'max_depth': [None, 10, 20, 30],
-        'min_samples_split': [2, 5, 10],
-        'min_samples_leaf': [1, 2, 4]
+        'n_estimators': [100, 200, 300, 400, 500],
+        'max_depth': [None, 10, 20, 30, 40, 50],
+        'min_samples_split': [2, 5, 10, 20],
+        'min_samples_leaf': [1, 2, 4, 10]
     }
 
     rf = RandomForestClassifier(random_state=42)
     random_search = RandomizedSearchCV(estimator=rf, param_distributions=parameter_distributions, 
-                                       n_iter=10, cv=3, n_jobs=-1, verbose=2, random_state=42)
+                                       n_iter=30, cv=4, n_jobs=-1, verbose=2, random_state=42)
     random_search.fit(X_train, y_train)
 
     # Model Evaluation
@@ -80,6 +82,37 @@ def train_RF(raster_paths, shapefile_path):
 
     return best_estimator, best_score, performance_metrics
 
+def classify_new_rasters_without_shapefile(raster_paths, model):
+    """
+    Classify a set of rasters using the provided Random Forest model without using a shapefile.
+
+    Parameters:
+    raster_paths (list of str): List of file paths to the raster files.
+    model (RandomForestClassifier): Trained Random Forest model.
+    """
+    features = []
+
+    for path in raster_paths:
+        with rasterio.open(path) as src:
+            raster_data = src.read()  # Read the entire raster data
+            raster_flattened = raster_data.reshape(-1)  # Flatten the raster data
+            features.append(raster_flattened)
+
+    # Data Preparation: Reshape features (as done in training)
+    max_length = max([len(feature) for feature in features])
+    features = [np.pad(feature, (0, max_length - len(feature))) if len(feature) < max_length else feature[:max_length] for feature in features]
+
+    # Use the trained model to make predictions
+    predictions = model.predict(features)
+
+    return predictions
+
+# Usage Example
+
+# Assuming best_model is the trained Random Forest model
+
+
+
 # List of raster file paths
 raster_paths = [r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Test_Train_Set\Input_Layers\R.tif",
 r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Test_Train_Set\Input_Layers\G.tif",
@@ -89,10 +122,15 @@ r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Test_Tra
 rasters = [read_raster(path) for path in raster_paths]
 shapefile = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Test_Train_Set\VEG_BE_KEY.shp"
 
+
+
 # Extract features and raster outputs
 best_model, best_score, performance_metrics = train_RF(raster_paths, shapefile)
 
+new_raster_predictions = classify_new_rasters_without_shapefile(raster_paths, best_model)
 
 print(f"Best model parameters: {best_model.get_params()}")
 print(f"Best model accuracy: {best_score}")
+print(f"Best model performance metrics: {performance_metrics}")
+print(f"New raster predictions: {new_raster_predictions}")
 
