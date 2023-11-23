@@ -318,9 +318,9 @@ def main():
     # List of raster file paths
     ortho_path = r"Z:\ATD\Drone Data Processing\Metashape Exports\Bennett\ME\11-4-23\ME_Ortho_Spring2023_v1.tif"
     output_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 9 Large\Inputs"
-    raster_paths = split_bands(ortho_path, 'Test_v1', output_path)
+    #raster_paths = split_bands(ortho_path, 'Test_v1', output_path)
     #drop the last band in raster_paths
-    raster_paths.pop()
+    #raster_paths.pop()
     RGB_path = [r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 9 Large\Inputs\R.tif",
                 r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 9 Large\Inputs\G.tif",
                 r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 9 Large\Inputs\B.tif"]
