@@ -196,3 +196,146 @@ def split_bands(input_raster, output_prefix, output_path):
     ds = None  # Close the input file
     return output_files
 
+def stack_bands(input_raster_list):
+    """
+    Stack multiple single-band rasters into a multi-band raster.
+
+    :param input_raster_list: List of paths to input raster files.
+    :return: Path to the created multi-band raster file.
+    """
+    if not input_raster_list:
+        raise ValueError("Input raster list is empty")
+
+    # Determine the base directory from the first input raster
+    base_dir = Path(input_raster_list[0]).parent
+    output_file = base_dir / "stacked_bands_output_dem.tif"
+
+    # Open the first file to get the projection and geotransform
+    src_ds = gdal.Open(input_raster_list[0])
+    geotransform = src_ds.GetGeoTransform()
+    projection = src_ds.GetProjection()
+
+    # Create a driver for the output
+    driver = gdal.GetDriverByName('GTiff')
+
+    # Create the output dataset
+    out_ds = driver.Create(str(output_file), src_ds.RasterXSize, src_ds.RasterYSize, len(input_raster_list), gdal.GDT_Float32)
+    out_ds.SetGeoTransform(geotransform)
+    out_ds.SetProjection(projection)
+
+    # Loop through the input rasters and stack them
+    for i, raster_path in enumerate(input_raster_list, start=1):
+        raster_ds = gdal.Open(raster_path)
+        band = raster_ds.GetRasterBand(1)
+        out_ds.GetRasterBand(i).WriteArray(band.ReadAsArray())
+
+    # Close datasets
+    src_ds = None
+    out_ds = None
+
+    return str(output_file)
+
+def processRGB(RGB_Path, chunk_size=1024):
+    """
+    Perform operations on provided R, G, B TIFF files and save the results as new TIFF files.
+    Operations: EGI, Saturation, and normalized r, g, b.
+    This version processes large rasters in chunks to handle large datasets.
+
+    Parameters:
+    RGB_path (list): a list of File paths to the Red, Green, and Blue channels of the TIFF file.
+    chunk_size (int): Size of the chunks to process at a time.
+    """
+    def create_output_dataset(output_path, x_size, y_size, geotransform, projection):
+        """
+        Create an output dataset for storing processed data.
+        Nested within processRGB.
+
+        Parameters:
+        output_path (str): Path to the output file.
+        x_size, y_size (int): Dimensions of the raster.
+        geotransform, projection: Spatial metadata from the input dataset.
+        """
+        driver = gdal.GetDriverByName('GTiff')
+        dataset = driver.Create(output_path, x_size, y_size, 1, gdal.GDT_Float32)
+        dataset.SetGeoTransform(geotransform)
+        dataset.SetProjection(projection)
+        return dataset
+
+    # Open the raster files
+    r_dataset = gdal.Open(RGB_Path[0])
+    g_dataset = gdal.Open(RGB_Path[1])
+    b_dataset = gdal.Open(RGB_Path[2])
+
+    if not r_dataset or not g_dataset or not b_dataset:
+        print("Failed to open one or more files")
+        return
+
+    # Get raster metadata
+    geotransform = r_dataset.GetGeoTransform()
+    projection = r_dataset.GetProjection()
+    x_size = r_dataset.RasterXSize
+    y_size = r_dataset.RasterYSize
+
+    # Prepare output base
+    output_base = os.path.dirname(RGB_Path[0])
+
+    # Initialize output files
+    EGI_output = os.path.join(output_base, 'EGI.tif')
+    Sat_output = os.path.join(output_base, 'Saturation.tif')
+
+    EGI_dataset = create_output_dataset(EGI_output, x_size, y_size, geotransform, projection)
+    Sat_dataset = create_output_dataset(Sat_output, x_size, y_size, geotransform, projection)
+
+    # Process in chunks
+    for y in range(0, y_size, chunk_size):
+        for x in range(0, x_size, chunk_size):
+            width = min(chunk_size, x_size - x)
+            height = min(chunk_size, y_size - y)
+
+            # Read chunk for each band
+            R_array = r_dataset.ReadAsArray(x, y, width, height).astype(np.float64)
+            G_array = g_dataset.ReadAsArray(x, y, width, height).astype(np.float64)
+            B_array = b_dataset.ReadAsArray(x, y, width, height).astype(np.float64)
+
+            # Process chunk
+            EGI_array = np.multiply(G_array, 3) - 1
+            Saturation_array = 1 - np.min(np.array([R_array, G_array, B_array]), axis=0)
+
+            # Write chunk to output
+            EGI_dataset.GetRasterBand(1).WriteArray(EGI_array, x, y)
+            Sat_dataset.GetRasterBand(1).WriteArray(Saturation_array, x, y)
+            print("Processed  ", x, " chunks of ", x_size)
+        print("Processed  ", y, " chunks of ", y_size)
+    # Close datasets
+    EGI_dataset = None
+    Sat_dataset = None
+
+    return [EGI_output, Sat_output]
+
+
+def main():
+   
+    # List of raster file paths
+    ortho_path = r"Z:\ATD\Drone Data Processing\Metashape Exports\Bennett\ME\11-4-23\ME_Ortho_Spring2023_v1.tif"
+    output_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 9 Large\Inputs"
+    raster_paths = split_bands(ortho_path, 'Test_v1', output_path)
+    #drop the last band in raster_paths
+    raster_paths.pop()
+    RGB_path = [r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 9 Large\Inputs\R.tif",
+                r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 9 Large\Inputs\G.tif",
+                r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 9 Large\Inputs\B.tif"]
+    preprocessed_list = processRGB(RGB_path)
+    
+
+    
+    stack_list = [r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 8\Inputs\Roughness.tif",
+                r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 6\Inputs\Test_v1band_1.tif",
+                r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 6\Inputs\Test_v1band_2.tif",
+                r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 6\Inputs\Test_v1band_3.tif",
+                r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 7\Inputs\Saturation.tif",
+                r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 7\Inputs\EGI.tif"]
+    #op_stack = stack_bands(stack_list)
+    
+    
+if __name__ == '__main__':
+    main()

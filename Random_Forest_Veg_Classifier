@@ -13,31 +13,7 @@ import os
 from osgeo import gdal
 from joblib import Parallel, delayed
 
-
-def read_raster(file_path):
-    # Open the raster file and return the DatasetReader object and its transform
-    src = rasterio.open(file_path)
-    return src, src.transform
-
-def extract_features(rasters, shapefile):
-    features = []
-    labels = []
-    raster_outputs = []
-
-    for src, transform in rasters:
-        raster = src.read()  # Read the raster data as a NumPy array here
-        for index, row in shapefile.iterrows():
-            out_image, out_transform = mask(src, [row['geometry']], crop=True)
-            out_image = out_image.reshape(-1)
-            features.append(out_image)
-            labels.append(row['MC'])
-            raster_outputs.append(out_image)
-
-    # Close each raster file after processing
-    for src, _ in rasters:
-        src.close()
-
-    return features, labels, raster_outputs
+from GIStools import extract_features, read_raster
 
 def train_RF(raster_paths, shapefile_path):
     # Read rasters and shapefile
@@ -61,7 +37,7 @@ def train_RF(raster_paths, shapefile_path):
 
     # Random Forest Training
     parameter_distributions = {
-        'n_estimators': [100, 200, 300, 400, 500],
+        'n_estimators': [10, 30, 50],
         'max_depth': [None, 10, 20, 30, 40, 50],
         'min_samples_split': [2, 5, 10, 20],
         'min_samples_leaf': [1, 2, 4, 10]
@@ -121,7 +97,6 @@ def classify_large_raster(raster_paths, classifier, max_length, tile_size=256, n
     """
 
     def classify_tile(data, window, max_length, tile_size, classifier):
-    
         window_height = min(tile_size, data.shape[1] - window[0])
         window_width = min(tile_size, data.shape[2] - window[1])
 
@@ -139,9 +114,14 @@ def classify_large_raster(raster_paths, classifier, max_length, tile_size=256, n
                 # Predict the class for the current pixel
                 prediction = classifier.predict(pixel_data_reshaped.reshape(1, -1))
 
-                # Assign the prediction to the classified tile
-                classified_tile[i, j] = prediction
+                # Extract the single prediction value from the array
+                prediction_value = prediction[0]
 
+                # Assign the prediction to the classified tile
+                classified_tile[i, j] = prediction_value
+                print(f"Pixel classified as {prediction_value}")
+                
+        print(f"Iteration: ", i, " of ", window_height)
         return classified_tile
 
 
@@ -182,8 +162,6 @@ raster_paths = [r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filteri
 r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Test_Train_Set\Input_Layers\G.tif",
 r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Test_Train_Set\Input_Layers\B.tif"]
 
-# Read rasters and shapefile
-rasters = [read_raster(path) for path in raster_paths]
 shapefile = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Test_Train_Set\VEG_BE_KEY.shp"
 
 
@@ -194,7 +172,7 @@ r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Test_Tra
 # Extract features and raster outputs
 best_model, best_score, performance_metrics, max_length = train_RF(raster_paths, shapefile)
 
-new_raster_predictions = classify_large_raster(raster_paths, best_model, max_length)
+#new_raster_predictions = classify_large_raster(test_rasters, best_model, max_length)
 
 print(f"New raster predictions: {new_raster_predictions}")
 
