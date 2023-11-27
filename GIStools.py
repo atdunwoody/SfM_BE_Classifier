@@ -9,6 +9,36 @@ import numpy as np
 import os
 import geopandas as gpd
 
+# Tell GDAL to throw Python exceptions, and register all drivers
+gdal.UseExceptions()
+gdal.AllRegister()
+
+
+
+def extract_polygon_by_id(shapefile_path, polygon_id, id_field='id'):
+    """
+    Extracts a polygon from a shapefile by its id.
+
+    :param shapefile_path: Path to the shapefile.
+    :param polygon_id: The id of the polygon to extract.
+    :param id_field: The name of the field containing the id. Default is 'id'.
+    :return: A GeoDataFrame containing the extracted polygon.
+    """
+    # Read the shapefile
+    gdf = gpd.read_file(shapefile_path)
+
+    # Extract the polygon with the specified id
+    polygon = gdf[gdf[id_field] == polygon_id]
+
+    shapes = gpd.read_file(shapefile_path)
+
+    # Convert all shapes to a list of GeoJSON-like geometry dictionaries
+
+    
+    return polygon
+
+
+
 
 def clip_rasters_by_extent(target_raster_paths, template_raster_path):
     """
@@ -55,7 +85,7 @@ def clip_rasters_by_extent(target_raster_paths, template_raster_path):
             clip_rasters.append(output_path)
     return clip_rasters
 
-def mask_rasters_by_shapefile(raster_paths, shapefile_path, layer_name):
+def mask_rasters_by_shapefile(raster_paths, shapefile_path, output_folder, id_value=None, id_field='id'):
     """
     Mask a list of rasters by all shapes in a shapefile layer.
 
@@ -65,11 +95,16 @@ def mask_rasters_by_shapefile(raster_paths, shapefile_path, layer_name):
     layer_name (str): Name of the layer in the GeoPackage to use for masking.
     """
     # Read the shapes from the GeoPackage layer
-    shapes = gpd.read_file(shapefile_path, layer=layer_name)
+    if id_value:
+
+        gfd = gpd.read_file(shapefile_path)
+        shapes = gfd[gfd[id_field] == id_value]
+    else:       
+        shapes = gpd.read_file(shapefile_path)
 
     # Convert all shapes to a list of GeoJSON-like geometry dictionaries
     shapes_geometry = shapes.geometry.values
-
+    raster_outputs = []
     # Mask each raster with all shapes
     for raster_path in raster_paths:
         with rasterio.open(raster_path) as src:
@@ -85,11 +120,16 @@ def mask_rasters_by_shapefile(raster_paths, shapefile_path, layer_name):
             })
 
             # Save the masked raster
-            masked_raster_path = raster_path.replace('.tif', '_masked.tif')
+            #Get the output raster name
+            masked_raster_path = os.path.join(output_folder, os.path.basename(raster_path))
+            
+            #masked_raster_path = raster_path.replace('.tif', '_masked.tif')
             with rasterio.open(masked_raster_path, "w", **out_meta) as dest:
                 dest.write(out_image)
 
             print(f"Masked raster saved to {masked_raster_path}")
+            raster_outputs.append(masked_raster_path)
+    return raster_outputs
 
 def save_rasters(named_arrays, template_dataset, output_folder):
     """
@@ -208,7 +248,7 @@ def stack_bands(input_raster_list):
 
     # Determine the base directory from the first input raster
     base_dir = Path(input_raster_list[0]).parent
-    output_file = base_dir / "stacked_bands_output_dem.tif"
+    output_file = base_dir / "stacked_bands_output_large.tif"
 
     # Open the first file to get the projection and geotransform
     src_ds = gdal.Open(input_raster_list[0])
@@ -228,6 +268,7 @@ def stack_bands(input_raster_list):
         raster_ds = gdal.Open(raster_path)
         band = raster_ds.GetRasterBand(1)
         out_ds.GetRasterBand(i).WriteArray(band.ReadAsArray())
+        print(f"Band {i} of ", len(input_raster_list), " stacked")
 
     # Close datasets
     src_ds = None
@@ -324,18 +365,28 @@ def main():
     RGB_path = [r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 9 Large\Inputs\R.tif",
                 r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 9 Large\Inputs\G.tif",
                 r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 9 Large\Inputs\B.tif"]
-    preprocessed_list = processRGB(RGB_path)
+    #preprocessed_list = processRGB(RGB_path)
     
+    # Example usage
+    shapefile_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 11 Grid\grid_300x300m.shp"
+    polygon_id = 21  # Replace with the id of the polygon you want to extract
 
     
-    stack_list = [r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 8\Inputs\Roughness.tif",
-                r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 6\Inputs\Test_v1band_1.tif",
-                r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 6\Inputs\Test_v1band_2.tif",
-                r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 6\Inputs\Test_v1band_3.tif",
-                r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 7\Inputs\Saturation.tif",
-                r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 7\Inputs\EGI.tif"]
-    #op_stack = stack_bands(stack_list)
+     
+    clipper = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 10 Tiles\clipper.shp"
+    output_folder = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 11 Grid\Inputs\Masks_21"
+    raster_paths =[r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 9 Large\Inputs\Subset_Inputs\Roughness.tif", 
+                    r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 9 Large\Inputs\Subset_Inputs\R.tif",
+                    r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 9 Large\Inputs\Subset_Inputs\G.tif",
+                    r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 9 Large\Inputs\Subset_Inputs\B.tif",
+                    r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 9 Large\Inputs\Subset_Inputs\Saturation.tif",
+                    r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 9 Large\Inputs\Subset_Inputs\EGI.tif"
+                    ]
     
+    
+    masked_list = mask_rasters_by_shapefile(raster_paths, shapefile_path, output_folder, id_value=polygon_id)
+    #op_stack = stack_bands(stack_list)
+    #print(op_stack)
     
 if __name__ == '__main__':
     main()
