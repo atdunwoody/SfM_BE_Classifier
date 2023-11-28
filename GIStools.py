@@ -1,4 +1,4 @@
-from osgeo import gdal
+from osgeo import gdal, gdal_array
 from pathlib import Path
 import rasterio
 from rasterio.mask import mask
@@ -8,6 +8,7 @@ import geopandas as gpd
 import numpy as np
 import os
 import geopandas as gpd
+import matplotlib.pyplot as plt # plot figures
 
 # Tell GDAL to throw Python exceptions, and register all drivers
 gdal.UseExceptions()
@@ -15,27 +16,44 @@ gdal.AllRegister()
 
 
 
-def extract_polygon_by_id(shapefile_path, polygon_id, id_field='id'):
+def valid_raster_check(shapefile_path, raster_path, id_value, id_field='id'):
     """
-    Extracts a polygon from a shapefile by its id.
+    Checks if a raster is valid within the area masked by a specified polygon in a shapefile layer.
 
     :param shapefile_path: Path to the shapefile.
-    :param polygon_id: The id of the polygon to extract.
-    :param id_field: The name of the field containing the id. Default is 'id'.
-    :return: A GeoDataFrame containing the extracted polygon.
+    :param raster_path: Path to the raster file.
+    :param id_value: The value of the ID to filter the polygon for masking.
+    :param id_field: The name of the field containing the ID. Default is 'id'.
+    :return: 1 if the raster is valid, None otherwise.
     """
     # Read the shapefile
     gdf = gpd.read_file(shapefile_path)
 
-    # Extract the polygon with the specified id
-    polygon = gdf[gdf[id_field] == polygon_id]
+    # Filter the GeoDataFrame for the specified id_value
+    gdf = gdf[gdf[id_field] == id_value]
 
-    shapes = gpd.read_file(shapefile_path)
+    if gdf.empty:
+        raise ValueError("No polygon with the specified ID found in the shapefile.")
 
-    # Convert all shapes to a list of GeoJSON-like geometry dictionaries
+    # Open the raster file using GDAL
+    img_ds = gdal.Open(raster_path, gdal.GA_ReadOnly)
 
-    
-    return polygon
+    # Read the raster into an array
+    img = np.zeros((img_ds.RasterYSize, img_ds.RasterXSize, img_ds.RasterCount),
+                   gdal_array.GDALTypeCodeToNumericTypeCode(img_ds.GetRasterBand(1).DataType))
+    for b in range(img.shape[2]):
+        img[:, :, b] = img_ds.GetRasterBand(b + 1).ReadAsArray()
+
+    # Generate mask from the red band (assuming it is the first band)
+    mask = np.copy(img[:, :, 0])
+    mask[mask > 0.0] = 1.0  # Set all actual pixels to 1.0
+
+    # Check if all cells in the first and last rows and columns are masked
+    if np.all(mask[0, :] == 0) or np.all(mask[-1, :] == 0) or \
+       np.all(mask[:, 0] == 0) or np.all(mask[:, -1] == 0):
+        return None
+    else:
+        return 1
 
 
 
@@ -93,10 +111,12 @@ def mask_rasters_by_shapefile(raster_paths, shapefile_path, output_folder, id_va
     raster_paths (list of str): List of file paths to the raster files.
     shapefile_path (str): File path to the shapefile (GeoPackage).
     layer_name (str): Name of the layer in the GeoPackage to use for masking.
+    
+    Return 
+    raster_outputs (list of str): List of file paths to the masked raster files.
     """
     # Read the shapes from the GeoPackage layer
     if id_value:
-
         gfd = gpd.read_file(shapefile_path)
         shapes = gfd[gfd[id_field] == id_value]
     else:       
@@ -248,7 +268,7 @@ def stack_bands(input_raster_list):
 
     # Determine the base directory from the first input raster
     base_dir = Path(input_raster_list[0]).parent
-    output_file = base_dir / "stacked_bands_output_large.tif"
+    output_file = base_dir / "stacked_bands_output.tif"
 
     # Open the first file to get the projection and geotransform
     src_ds = gdal.Open(input_raster_list[0])
@@ -369,13 +389,14 @@ def main():
     
     # Example usage
     shapefile_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 11 Grid\grid_300x300m.shp"
-    polygon_id = 21  # Replace with the id of the polygon you want to extract
+    polygon_id = 11  # Replace with the id of the polygon you want to extract
 
     
      
     clipper = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 10 Tiles\clipper.shp"
-    output_folder = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 11 Grid\Inputs\Masks_21"
-    raster_paths =[r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 9 Large\Inputs\Subset_Inputs\Roughness.tif", 
+    output_folder = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 11 Grid\Inputs\Masks_15"
+    
+    raster_paths =[r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 9 Large\Inputs\Subset_Inputs\Roughness.tif",
                     r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 9 Large\Inputs\Subset_Inputs\R.tif",
                     r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 9 Large\Inputs\Subset_Inputs\G.tif",
                     r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 9 Large\Inputs\Subset_Inputs\B.tif",
@@ -383,9 +404,14 @@ def main():
                     r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 9 Large\Inputs\Subset_Inputs\EGI.tif"
                     ]
     
+    # Example usage
+
+    id_value = 1  # Replace with the id value you want to use for masking
+    result = valid_raster_check(shapefile_path, raster_paths[1], polygon_id)
+    print(result)
     
-    masked_list = mask_rasters_by_shapefile(raster_paths, shapefile_path, output_folder, id_value=polygon_id)
-    #op_stack = stack_bands(stack_list)
+    #masked_list = mask_rasters_by_shapefile(raster_paths, shapefile_path, output_folder, id_value=polygon_id)
+    #op_stack = stack_bands(masked_list)
     #print(op_stack)
     
 if __name__ == '__main__':
