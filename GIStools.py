@@ -10,50 +10,13 @@ import os
 import geopandas as gpd
 import matplotlib.pyplot as plt # plot figures
 
+
 # Tell GDAL to throw Python exceptions, and register all drivers
 gdal.UseExceptions()
 gdal.AllRegister()
 
 
 
-def valid_raster_check(shapefile_path, raster_path, id_value, id_field='id'):
-    """
-    Checks if a raster is valid within the area masked by a specified polygon in a shapefile layer.
-
-    :param shapefile_path: Path to the shapefile.
-    :param raster_path: Path to the raster file.
-    :param id_value: The value of the ID to filter the polygon for masking.
-    :param id_field: The name of the field containing the ID. Default is 'id'.
-    :return: 1 if the raster is valid, None otherwise.
-    """
-    # Read the shapefile
-    gdf = gpd.read_file(shapefile_path)
-
-    # Filter the GeoDataFrame for the specified id_value
-    gdf = gdf[gdf[id_field] == id_value]
-
-    if gdf.empty:
-        raise ValueError("No polygon with the specified ID found in the shapefile.")
-
-    # Open the raster file using GDAL
-    img_ds = gdal.Open(raster_path, gdal.GA_ReadOnly)
-
-    # Read the raster into an array
-    img = np.zeros((img_ds.RasterYSize, img_ds.RasterXSize, img_ds.RasterCount),
-                   gdal_array.GDALTypeCodeToNumericTypeCode(img_ds.GetRasterBand(1).DataType))
-    for b in range(img.shape[2]):
-        img[:, :, b] = img_ds.GetRasterBand(b + 1).ReadAsArray()
-
-    # Generate mask from the red band (assuming it is the first band)
-    mask = np.copy(img[:, :, 0])
-    mask[mask > 0.0] = 1.0  # Set all actual pixels to 1.0
-
-    # Check if all cells in the first and last rows and columns are masked
-    if np.all(mask[0, :] == 0) or np.all(mask[-1, :] == 0) or \
-       np.all(mask[:, 0] == 0) or np.all(mask[:, -1] == 0):
-        return None
-    else:
-        return 1
 
 
 
@@ -103,53 +66,74 @@ def clip_rasters_by_extent(target_raster_paths, template_raster_path):
             clip_rasters.append(output_path)
     return clip_rasters
 
-def mask_rasters_by_shapefile(raster_paths, shapefile_path, output_folder, id_value=None, id_field='id'):
+
+def mask_rasters_by_shapefile(raster_paths, shapefile_path, output_folder, id_values, id_field='id', stack = False):
     """
-    Mask a list of rasters by all shapes in a shapefile layer.
+    Mask a list of rasters by different polygons specified by id_values from a single shapefile.
 
     Parameters:
     raster_paths (list of str): List of file paths to the raster files.
-    shapefile_path (str): File path to the shapefile (GeoPackage).
-    layer_name (str): Name of the layer in the GeoPackage to use for masking.
-    
+    shapefile_path (str): File path to the shapefile.
+    output_folder (str): Folder path to save the masked rasters.
+    id_values (list of int/str): List of id values to use for masking from the shapefile.
+    id_field (str): Field name in the shapefile containing the IDs.
+
     Return 
-    raster_outputs (list of str): List of file paths to the masked raster files.
+    raster_outputs (dict): Dictionary where keys are id_values and values are lists of file paths to the masked raster files.
     """
-    # Read the shapes from the GeoPackage layer
-    if id_value:
-        gfd = gpd.read_file(shapefile_path)
-        shapes = gfd[gfd[id_field] == id_value]
-    else:       
-        shapes = gpd.read_file(shapefile_path)
+    # Ensure output folder exists
+    Path(output_folder).mkdir(parents=True, exist_ok=True)
 
-    # Convert all shapes to a list of GeoJSON-like geometry dictionaries
-    shapes_geometry = shapes.geometry.values
-    raster_outputs = []
-    # Mask each raster with all shapes
-    for raster_path in raster_paths:
-        with rasterio.open(raster_path) as src:
-            out_image, out_transform = mask(src, shapes_geometry, crop=True)
-            out_meta = src.meta.copy()
+    # Read the shapefile
+    gdf = gpd.read_file(shapefile_path)
 
-            # Update metadata for the masked raster
-            out_meta.update({
-                "driver": "GTiff",
-                "height": out_image.shape[1],
-                "width": out_image.shape[2],
-                "transform": out_transform
-            })
+    raster_outputs = {}
+    for id_value in id_values:
+        shapes = gdf[gdf[id_field] == id_value]
 
-            # Save the masked raster
-            #Get the output raster name
-            masked_raster_path = os.path.join(output_folder, os.path.basename(raster_path))
-            
-            #masked_raster_path = raster_path.replace('.tif', '_masked.tif')
-            with rasterio.open(masked_raster_path, "w", **out_meta) as dest:
-                dest.write(out_image)
+        if shapes.empty:
+            print(f"No shape with ID {id_value} found in shapefile.")
+            continue
 
-            print(f"Masked raster saved to {masked_raster_path}")
-            raster_outputs.append(masked_raster_path)
+        # Convert shapes to a list of GeoJSON-like geometry dictionaries
+        shapes_geometry = shapes.geometry.values
+
+        # Create a subfolder for each id_value
+        id_specific_output_folder = Path(output_folder) / f"Masked_{id_value}"
+        id_specific_output_folder.mkdir(parents=True, exist_ok=True)
+
+        masked_rasters_for_id = []
+        for raster_path in raster_paths:
+            with rasterio.open(raster_path) as src:
+                out_image, out_transform = mask(src, shapes_geometry, crop=True)
+                out_meta = src.meta.copy()
+
+                # Update metadata for the masked raster
+                out_meta.update({
+                    "driver": "GTiff",
+                    "height": out_image.shape[1],
+                    "width": out_image.shape[2],
+                    "transform": out_transform
+                })
+
+                # Construct the output raster file path
+                raster_filename = os.path.basename(raster_path)
+                masked_raster_filename = f"{os.path.splitext(raster_filename)[0]}_masked_{id_value}.tif"
+                masked_raster_path = id_specific_output_folder / masked_raster_filename
+
+                # Save the masked raster
+                with rasterio.open(masked_raster_path, "w", **out_meta) as dest:
+                    dest.write(out_image)
+
+                print(f"Masked raster saved to {masked_raster_path}")
+                masked_rasters_for_id.append(str(masked_raster_path))
+
+        raster_outputs[id_value] = masked_rasters_for_id
+        if stack:
+            stack_bands(masked_rasters_for_id)
     return raster_outputs
+
+
 
 def save_rasters(named_arrays, template_dataset, output_folder):
     """
@@ -394,7 +378,7 @@ def main():
     
      
     clipper = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 10 Tiles\clipper.shp"
-    output_folder = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 11 Grid\Inputs\Masks_15"
+    output_folder = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 11 Grid\Inputs"
     
     raster_paths =[r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 9 Large\Inputs\Subset_Inputs\Roughness.tif",
                     r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 9 Large\Inputs\Subset_Inputs\R.tif",
@@ -405,10 +389,11 @@ def main():
                     ]
     
     # Example usage
-
-    id_value = 1  # Replace with the id value you want to use for masking
-    result = valid_raster_check(shapefile_path, raster_paths[1], polygon_id)
-    print(result)
+    # Example usage
+    
+    #ME valid ID values also include 2, 3, 15, 21, 38
+    id_values = [4, 7, 8, 9, 10, 13, 14, 16, 17, 20, 22, 23, 25, 26, 27, 28, 29, 31, 32, 33, 34, 35, 37, 39, 43, 44]  # List of id values for masking
+    masked_rasters = mask_rasters_by_shapefile(raster_paths, shapefile_path, output_folder, id_values, stack = True)
     
     #masked_list = mask_rasters_by_shapefile(raster_paths, shapefile_path, output_folder, id_value=polygon_id)
     #op_stack = stack_bands(masked_list)
