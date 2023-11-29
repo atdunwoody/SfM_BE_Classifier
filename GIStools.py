@@ -18,9 +18,6 @@ gdal.AllRegister()
 
 
 
-
-
-
 def clip_rasters_by_extent(target_raster_paths, template_raster_path):
     """
     Clip a list of rasters by the extent of another raster and save the results.
@@ -86,7 +83,8 @@ def mask_rasters_by_shapefile(raster_paths, shapefile_path, output_folder, id_va
 
     # Read the shapefile
     gdf = gpd.read_file(shapefile_path)
-
+    print(raster_paths)
+    
     raster_outputs = {}
     for id_value in id_values:
         shapes = gdf[gdf[id_field] == id_value]
@@ -133,71 +131,6 @@ def mask_rasters_by_shapefile(raster_paths, shapefile_path, output_folder, id_va
             stack_bands(masked_rasters_for_id)
     return raster_outputs
 
-
-
-def save_rasters(named_arrays, template_dataset, output_folder):
-    """
-    Save multiple numpy arrays as TIFF files using a template dataset for geospatial information,
-    with each file named according to a provided dictionary.
-
-    Parameters:
-    named_arrays (dict): A dictionary where keys are file names and values are numpy arrays to save.
-    template_dataset: The GDAL dataset to use as a template for geospatial information.
-    output_folder (str): The folder to save the output files.
-    """
-    # Create the output folder if it doesn't exist
-
-    print(output_folder)
-    if not os.path.exists(output_folder):
-        os.makedirs(output_folder)
-
-    driver = gdal.GetDriverByName('GTiff')
-    saved_file_paths = []
-
-    for name, array in named_arrays.items():
-        output_path = os.path.join(output_folder, f'{name}.tif')
-        out_dataset = driver.Create(output_path, 
-                                    template_dataset.RasterXSize, 
-                                    template_dataset.RasterYSize, 
-                                    1, 
-                                    gdal.GDT_Float32)
-        out_dataset.SetGeoTransform(template_dataset.GetGeoTransform())
-        out_dataset.SetProjection(template_dataset.GetProjection())
-
-        out_band = out_dataset.GetRasterBand(1)
-        out_band.WriteArray(array)
-
-        out_band.FlushCache()
-        out_dataset = None
-
-        saved_file_paths.append(output_path)
-
-    return saved_file_paths
-
-def read_raster(file_path):
-    # Open the raster file and return the DatasetReader object and its transform
-    src = rasterio.open(file_path)
-    return src, src.transform
-
-def extract_features(rasters, shapefile):
-    features = []
-    labels = []
-    raster_outputs = []
-
-    for src, transform in rasters:
-        raster = src.read()  # Read the raster data as a NumPy array here
-        for index, row in shapefile.iterrows():
-            out_image, out_transform = mask(src, [row['geometry']], crop=True)
-            out_image = out_image.reshape(-1)
-            features.append(out_image)
-            labels.append(row['MC'])
-            raster_outputs.append(out_image)
-
-    # Close each raster file after processing
-    for src, _ in rasters:
-        src.close()
-
-    return features, labels, raster_outputs
 
 def split_bands(input_raster, output_prefix, output_path):
     """
@@ -280,20 +213,18 @@ def stack_bands(input_raster_list):
 
     return str(output_file)
 
-def processRGB(RGB_Path, chunk_size=1024):
+def processRGB(RGB_Path):
     """
     Perform operations on provided R, G, B TIFF files and save the results as new TIFF files.
     Operations: EGI, Saturation, and normalized r, g, b.
-    This version processes large rasters in chunks to handle large datasets.
+    This version processes the entire raster at once.
 
     Parameters:
     RGB_path (list): a list of File paths to the Red, Green, and Blue channels of the TIFF file.
-    chunk_size (int): Size of the chunks to process at a time.
     """
     def create_output_dataset(output_path, x_size, y_size, geotransform, projection):
         """
         Create an output dataset for storing processed data.
-        Nested within processRGB.
 
         Parameters:
         output_path (str): Path to the output file.
@@ -331,38 +262,113 @@ def processRGB(RGB_Path, chunk_size=1024):
     EGI_dataset = create_output_dataset(EGI_output, x_size, y_size, geotransform, projection)
     Sat_dataset = create_output_dataset(Sat_output, x_size, y_size, geotransform, projection)
 
-    # Process in chunks
-    for y in range(0, y_size, chunk_size):
-        for x in range(0, x_size, chunk_size):
-            width = min(chunk_size, x_size - x)
-            height = min(chunk_size, y_size - y)
+    # Read entire image for each band
+    R_array = r_dataset.ReadAsArray().astype(np.float64) / 255
+    G_array = g_dataset.ReadAsArray().astype(np.float64) / 255
+    B_array = b_dataset.ReadAsArray().astype(np.float64) / 255
 
-            # Read chunk for each band
-            R_array = r_dataset.ReadAsArray(x, y, width, height).astype(np.float64)
-            G_array = g_dataset.ReadAsArray(x, y, width, height).astype(np.float64)
-            B_array = b_dataset.ReadAsArray(x, y, width, height).astype(np.float64)
+    # Process entire image
+    EGI_array = np.multiply(G_array, 3) - 1
+    Saturation_array = 1 - np.min(np.array([R_array, G_array, B_array]), axis=0)
 
-            # Process chunk
-            EGI_array = np.multiply(G_array, 3) - 1
-            Saturation_array = 1 - np.min(np.array([R_array, G_array, B_array]), axis=0)
+    # Write entire image to output
+    EGI_dataset.GetRasterBand(1).WriteArray(EGI_array)
+    Sat_dataset.GetRasterBand(1).WriteArray(Saturation_array)
 
-            # Write chunk to output
-            EGI_dataset.GetRasterBand(1).WriteArray(EGI_array, x, y)
-            Sat_dataset.GetRasterBand(1).WriteArray(Saturation_array, x, y)
-            print("Processed  ", x, " chunks of ", x_size)
-        print("Processed  ", y, " chunks of ", y_size)
     # Close datasets
     EGI_dataset = None
     Sat_dataset = None
 
+    print("Processing completed.")
     return [EGI_output, Sat_output]
 
+def compute_roughness(dem_path, output_path, max_roughness=None):
+    """
+    Compute the roughness of a DEM and save the result to a new raster file.
+
+    Parameters:
+    dem_path (str): Path to the input DEM file.
+    output_path (str): Path to save the output roughness raster.
+    max_roughness (float, optional): Maximum roughness value to filter the output raster.
+    """
+    # Open the DEM file
+    dem_ds = gdal.Open(dem_path)
+    if not dem_ds:
+        print("Failed to open DEM file.")
+        return
+
+    # Read DEM data
+    dem_array = dem_ds.ReadAsArray()
+    x_size, y_size = dem_array.shape
+
+    # Initialize roughness array
+    roughness_array = np.zeros_like(dem_array, dtype=np.float32)
+
+    # Calculate roughness
+    for i in range(1, x_size - 1):
+        for j in range(1, y_size - 1):
+            window = dem_array[i - 1:i + 2, j - 1:j + 2]
+            roughness_array[i, j] = np.abs(window[1, 1] - np.mean(window))
+
+    # Apply max roughness filter if specified
+    if max_roughness is not None:
+        roughness_array[roughness_array > max_roughness] = max_roughness
+
+    # Create output dataset
+    driver = gdal.GetDriverByName('GTiff')
+    out_ds = driver.Create(output_path, y_size, x_size, 1, gdal.GDT_Float32)
+    out_ds.SetGeoTransform(dem_ds.GetGeoTransform())
+    out_ds.SetProjection(dem_ds.GetProjection())
+
+    # Write roughness array to output dataset
+    out_band = out_ds.GetRasterBand(1)
+    out_band.WriteArray(roughness_array)
+    out_band.FlushCache()
+    out_ds = None
+
+    print(f"Roughness raster saved to: {output_path}")
+
+def match_dem_resolution(source_dem_path, target_dem_path, output_path):
+    """
+    Match the resolution of one DEM to another DEM.
+
+    Parameters:
+    source_dem_path (str): Path to the source DEM file whose resolution needs to be changed.
+    target_dem_path (str): Path to the target DEM file with the desired resolution.
+    output_path (str): Path where the output DEM with matched resolution will be saved.
+    """
+    # Open the source and target DEMs
+    source_ds = gdal.Open(source_dem_path)
+    target_ds = gdal.Open(target_dem_path)
+
+    if not source_ds or not target_ds:
+        print("Failed to open one or more DEM files.")
+        return
+
+    # Get geotransform and projection from the target DEM
+    target_gt = target_ds.GetGeoTransform()
+    target_proj = target_ds.GetProjection()
+    target_size_x = target_ds.RasterXSize
+    target_size_y = target_ds.RasterYSize
+
+    # Create an output dataset with the target DEM's resolution, projection and geotransform
+    driver = gdal.GetDriverByName('GTiff')
+    out_ds = driver.Create(output_path, target_size_x, target_size_y, 1, source_ds.GetRasterBand(1).DataType)
+    out_ds.SetGeoTransform(target_gt)
+    out_ds.SetProjection(target_proj)
+
+    # Perform the resampling
+    gdal.ReprojectImage(source_ds, out_ds, source_ds.GetProjection(), target_proj, gdal.GRA_Bilinear)
+
+    out_ds = None  # Close and save the file
+
+    print(f"Resampled DEM saved to: {output_path}")
 
 def main():
    
     # List of raster file paths
-    ortho_path = r"Z:\ATD\Drone Data Processing\Metashape Exports\Bennett\ME\11-4-23\ME_Ortho_Spring2023_v1.tif"
-    output_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 9 Large\Inputs"
+    #ortho_path = r"Z:\ATD\Drone Data Processing\Metashape Exports\Bennett\ME\11-4-23\ME_Ortho_Spring2023_v1.tif"
+    #output_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 9 Large\Inputs"
     #raster_paths = split_bands(ortho_path, 'Test_v1', output_path)
     #drop the last band in raster_paths
     #raster_paths.pop()
@@ -378,25 +384,28 @@ def main():
     
      
     clipper = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 10 Tiles\clipper.shp"
-    output_folder = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 11 Grid\Inputs"
+    output_folder = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs"
     
-    raster_paths =[r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 9 Large\Inputs\Subset_Inputs\Roughness.tif",
-                    r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 9 Large\Inputs\Subset_Inputs\R.tif",
-                    r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 9 Large\Inputs\Subset_Inputs\G.tif",
-                    r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 9 Large\Inputs\Subset_Inputs\B.tif",
-                    r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 9 Large\Inputs\Subset_Inputs\Saturation.tif",
-                    r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 9 Large\Inputs\Subset_Inputs\EGI.tif"
+    raster_paths =[r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Roughness.tif",
+                    r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\R.tif",
+                    r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\G.tif",
+                    r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\B.tif",
+                    r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Saturation.tif",
+                    r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\EGI.tif"
                     ]
     
     # Example usage
     # Example usage
-    
+    ortho_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Masked_38\ME_Ortho_Spring2023_v1_masked_38.tif"
+    dem_path = [r"Z:\ATD\Drone Data Processing\Metashape Exports\Bennett\ME\11-4-23\ME_DEM_Spring2023_3.54cm_v1.tif"]
     #ME valid ID values also include 2, 3, 15, 21, 38
-    id_values = [4, 7, 8, 9, 10, 13, 14, 16, 17, 20, 22, 23, 25, 26, 27, 28, 29, 31, 32, 33, 34, 35, 37, 39, 43, 44]  # List of id values for masking
-    masked_rasters = mask_rasters_by_shapefile(raster_paths, shapefile_path, output_folder, id_values, stack = True)
-    
+    #id_values = [4, 7, 8, 9, 10, 13, 14, 16, 17, 20, 22, 23, 25, 26, 27, 28, 29, 31, 32, 33, 34, 35, 37, 39, 43, 44]  # List of id values for masking
+    id_values=[38]
+    #masked_rasters = mask_rasters_by_shapefile(dem_path, shapefile_path, output_folder, id_values, stack = False)
+    #split = split_bands(ortho_path, "split_", output_folder)
+    #processRGB(split)
     #masked_list = mask_rasters_by_shapefile(raster_paths, shapefile_path, output_folder, id_value=polygon_id)
-    #op_stack = stack_bands(masked_list)
+    op_stack = stack_bands(raster_paths)
     #print(op_stack)
     
 if __name__ == '__main__':
