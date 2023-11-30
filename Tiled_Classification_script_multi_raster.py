@@ -16,19 +16,14 @@ gdal.UseExceptions()
 gdal.AllRegister()
 
 
-# ### Section - Input data
-# 
-# - This is the only section where you have to change something.
+
 
 # In[3]:
 
+#-------------------INPUTS-------------------#
 
 
-
-# the remote sensing image you want to classify
-# define a number of trees that should be used (default = 500)
-
-# define a number of trees that should be used (default = 500)
+# define a number of trees that should be used (default = 300)
 est = 300
 
 # how many cores should be used?
@@ -38,15 +33,12 @@ n_cores = -1
 # grid-clipped-image containing the training data
 img_RS = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Inputs_Automated\Grid_38\stacked_bands_output.tif"
 
-#prediction tile
-#img_LS = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Inputs_Automated\Grid_15\stacked_bands_output.tif"
 # training and validation as shape files
 training = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Results\Results_expanded_shapes - v2\Training-Validation Shapes\Training.shp"
 validation = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Results\Results_expanded_shapes - v2\Training-Validation Shapes\Validation.shp"
 
 # what is the attributes name of your classes in the shape file (field name of the classes)?
 attribute = 'id'
-
 
 #List of grid-clipped images to classify and associated id values
 img_path_list = [r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Inputs_Automated\Grid_15\stacked_bands_output.tif"]  # Replace with actual paths
@@ -55,7 +47,7 @@ id_values = [15]  # match order of id values to image paths
 # directory, where the classification image should be saved:
 output_folder = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Results\Results_expanded_shapes - v2"
 
-#join output folder with filename
+#output folder for list of img_path_list grid-clipped classified images
 classification_image = os.path.join(output_folder, 'ME_classified_masked.tif')
 
 # directory, where the all meta results should be saved:
@@ -65,7 +57,7 @@ results_txt = os.path.join(output_folder, 'ME_results.txt')
 # In[4]:
 
 
-# laod training data and show all shape attributes
+#-------------------SHAPEFILE DATA EXTRACTION-------------------#
 
 #model_dataset = gdal.Open(model_raster_fname)
 shape_dataset = ogr.Open(training)
@@ -82,12 +74,10 @@ for n in range(ldefn.GetFieldCount()):
 print('Available attributes in the shape file are: {}'.format(attributes))
 
 
-# ### Section - Data preparation
+
 
 # In[5]:
-
-
-# prepare results text file:
+#-------------------PREPARING RESULTS TEXT FILE-------------------#
 
 print('Random Forest Classification', file=open(results_txt, "a"))
 print('Processing: {}'.format(datetime.datetime.now()), file=open(results_txt, "a"))
@@ -103,7 +93,7 @@ print('-------------------------------------------------', file=open(results_txt
 
 
 # In[6]:
-# load image data
+#-------------------IMAGE DATA EXTRACTION-------------------#
 
 img_ds = gdal.Open(img_RS, gdal.GA_ReadOnly)
 
@@ -131,7 +121,7 @@ print('Number of Trees: {}'.format(est), file=open(results_txt, "a"))
 
 # In[8]:
 
-# load training data from shape file
+#-------------------TRAINING DATA EXTRACTION FROM SHAPEFILE-------------------#
 
 #model_dataset = gdal.Open(model_raster_fname)
 shape_dataset = ogr.Open(training)
@@ -146,8 +136,6 @@ mem_band.Fill(0)
 mem_band.SetNoDataValue(0)
 
 att_ = 'ATTRIBUTE='+attribute
-# http://gdal.org/gdal__alg_8h.html#adfe5e5d287d6c184aab03acbfa567cb1
-# http://gis.stackexchange.com/questions/31568/gdal-rasterizelayer-doesnt-burn-all-polygons-to-raster
 err = gdal.RasterizeLayer(mem_raster, [1], shape_layer, None, None, [1],  [att_,"ALL_TOUCHED=TRUE"])
 assert err == gdal.CE_None
 
@@ -155,17 +143,9 @@ roi = mem_raster.ReadAsArray()
 
 
 # In[9]:
-# Display images
-plt.subplot(121)
-plt.imshow(img[:, :, 0], cmap=plt.cm.Greys_r)
-plt.title('RS image - first band')
 
-plt.subplot(122)
-plt.imshow(roi, cmap=plt.cm.Spectral)
-plt.title('Training Image')
-
-
-
+#-------------------TRAINING DATA EXTRACTION FROM SHAPEFILE-------------------#
+# Find how many non-zero entries we have -- i.e. how many training data samples?
 # Number of training pixels:
 n_samples = (roi > 0).sum()
 print('{n} training samples'.format(n=n_samples))
@@ -186,11 +166,11 @@ print('Our X matrix is sized: {sz}'.format(sz=X.shape))
 print('Our y array is sized: {sz}'.format(sz=y.shape))
 
 
-# ### Section - Train Random Forest
+#--------------------Train Random Forest-----------------#
 
 # In[10]:
 
-rf = RandomForestClassifier(n_estimators=est, oob_score=True, verbose=1, n_jobs=n_cores)
+rf = RandomForestClassifier(n_estimators=est, oob_score=True, verbose=0, n_jobs=n_cores)
 
 # verbose = 2 -> prints out every tree progression
 # rf = RandomForestClassifier(n_estimators=est, oob_score=True, verbose=2, n_jobs=n_cores)
@@ -216,16 +196,15 @@ for b, imp in zip(bands, rf2.feature_importances_):
     print('Band {b} importance: {imp}'.format(b=b, imp=imp), file=open(results_txt, "a"))
 
     
-# Let's look at a crosstabulation to see the class confusion. 
-# To do so, we will import the Pandas library for some help:
-# Setup a dataframe -- just like R
-# Exception Handling because of possible Memory Error
+# Set up confusion matrix for cross-tabulation
+
 
 try:
     df = pd.DataFrame()
     df['truth'] = y
     df['predict'] = rf.predict(X)
 
+# Exception Handling because of possible Memory Error
 except MemoryError:
     print('Crosstab not available ')
 
@@ -243,6 +222,7 @@ plt.xlabel('classes - predicted')
 plt.ylabel('classes - truth')
 
 
+#-------------------PREDICTION ON TRAINING IMAGE-------------------#
 new_shape = (img.shape[0] * img.shape[1], img.shape[2])
 img_as_array = img[:, :, :int(img.shape[2])].reshape(new_shape)
 
@@ -290,7 +270,8 @@ except NameError:
 class_prediction = class_prediction.reshape(img[:, :, 0].shape)
 print('Reshaped back to {}'.format(class_prediction.shape))
 
-# generate mask image from red band
+
+#-------------------MASKING-------------------#
 mask = np.copy(img[:,:,0])
 mask[mask > 0.0] = 1.0 # all actual pixels have a value of 1.0
 
@@ -299,7 +280,7 @@ class_prediction.astype(np.float16)
 class_prediction_ = class_prediction*mask
 
 
-# Save the classification image
+#--------------SAVE CLASSIFICATION IMAGE-----------------#
 cols = img.shape[1]
 rows = img.shape[0]
 
