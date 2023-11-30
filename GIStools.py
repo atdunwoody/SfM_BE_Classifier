@@ -409,13 +409,13 @@ def main():
     clipper = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 10 Tiles\clipper.shp"
     output_folder = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Inputs_Automated"
     
-    raster_paths =[r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Roughness.tif",
-                    r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\R.tif",
-                    r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\G.tif",
-                    r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\B.tif",
-                    r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Saturation.tif",
-                    r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\EGI.tif"
-                    ]
+    raster_paths =[r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Results\Results_LDA\ME_classified_masked.tif",
+                    r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Inputs_Automated\Grid_38\Saturation.tif",
+                    r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Inputs_Automated\Grid_38\Roughness_Filtered_masked_38_clipped.tif",
+                    r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Inputs_Automated\Grid_38\orthoband_3.tif",
+                    r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Inputs_Automated\Grid_38\orthoband_2.tif",
+                    r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Inputs_Automated\Grid_38\orthoband_1.tif",
+                    r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Inputs_Automated\Grid_38\EGI.tif"]
     
     # Example usage
     # Example usage
@@ -430,13 +430,13 @@ def main():
     
     
     #match_dem_resolution(r_output, raster_paths[0], r_res_output)
-    preprocess_function(shapefile_path, ortho_path, r_path, grid_id, output_folder)
+    #preprocess_function(shapefile_path, ortho_path, r_path, grid_id, output_folder)
     
     
     #split = split_bands(ortho_path, "split_", output_folder)
     #processRGB(split)
     #masked_list = mask_rasters_by_shapefile(raster_paths, shapefile_path, output_folder, id_value=polygon_id)
-    #op_stack = stack_bands(raster_paths)
+    op_stack = stack_bands(raster_paths)
     #print(op_stack)
     
 if __name__ == '__main__':
