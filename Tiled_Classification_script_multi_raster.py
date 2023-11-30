@@ -1,5 +1,5 @@
 # packages
-import os
+import os, tempfile
 from osgeo import gdal, ogr, gdal_array # I/O image data
 import numpy as np # math and array handling
 import matplotlib.pyplot as plt # plot figures
@@ -52,12 +52,12 @@ attribute = 'id'
 img_path_list = [r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Inputs_Automated\Grid_15\stacked_bands_output.tif",r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Inputs_Automated\Grid_38\stacked_bands_output.tif"]  # Replace with actual paths
 id_values = [15, 38]  # Replace with actual ID values
 
-output_folder = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Results\Results_Auto_Multiple"
+output_folder = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Results\Results_Auto_Multiple\Updated"
 
-classification_image = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Results\Results_expanded_shapes\ME_RF_Classified_expanded_validation.tif"
+classification_image = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Results\Results_Auto_Multiple\Updated\ME_RF_Classified_expanded_validation.tif"
 
 # directory, where the all meta results should be saved:
-results_txt = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Results\Results_expanded_shapes\ME_RF_Results_expanded_validation.txt"
+results_txt = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Results\Results_Auto_Multiple\Updated\ME_RF_Results_expanded_validation.txt"
 
 
 # In[4]:
@@ -249,25 +249,29 @@ plt.ylabel('classes - truth')
 # ### Section - Prediction
 
 for index, (img_path, id_value) in enumerate(zip(img_path_list, id_values), start=1):
-    
-    output_file = os.path.join(output_folder, f"ME_classified_masked_{id_value}.tif")
-    img_ls = gdal.Open(img_path, gdal.GA_ReadOnly)
-    print(img_path, " id_value: ", id_value)
-    img = np.zeros((img_ls.RasterYSize, img_ls.RasterXSize, img_ls.RasterCount),
-                   gdal_array.GDALTypeCodeToNumericTypeCode(img_ls.GetRasterBand(1).DataType))
-    for b in range(img.shape[2]):
-        img[:, :, b] = img_ls.GetRasterBand(b + 1).ReadAsArray()
+        img_ds_temp = gdal.Open(img_path, gdal.GA_ReadOnly)
+        print(f"Processing {img_path}, ID value: {id_value}")
 
-    new_shape = (img.shape[0] * img.shape[1], img.shape[2])
-    img_as_array = img[:, :, :int(img.shape[2])].reshape(new_shape)
+        # Create a temporary file for the memory-mapped array
+        temp_file = tempfile.NamedTemporaryFile(delete=False)
+        filename = temp_file.name
+        temp_file.close()  # Close the file so np.memmap can use it
 
-    img_as_array = np.nan_to_num(img_as_array)
+        # Initialize a memory-mapped array to reduce memory usage
+        img_temp = np.memmap(filename, dtype=gdal_array.GDALTypeCodeToNumericTypeCode(img_ds_temp.GetRasterBand(1).DataType),
+                        mode='w+', shape=(img_ds_temp.RasterYSize, img_ds_temp.RasterXSize, img_ds_temp.RasterCount))
 
-    try:
-        class_prediction = rf.predict(img_as_array)
-    except MemoryError:
-        slices = int(round(len(img_as_array) / 2))
-        test = True
+        for b in range(img_ds_temp.RasterCount):
+            band = img_ds_temp.GetRasterBand(b + 1)
+            img_temp[:, :, b] = band.ReadAsArray()
+
+        img_as_array = np.nan_to_num(img_temp.reshape(-1, img_ds_temp.RasterCount))
+
+        try:
+            class_prediction = rf.predict(img_as_array)
+        except MemoryError:
+            slices = int(round(len(img_as_array) / 2))
+            test = True
 
         while test:
             try:
@@ -288,25 +292,29 @@ for index, (img_path, id_value) in enumerate(zip(img_path_list, id_values), star
                 test = False
                 class_prediction = np.concatenate(class_preds, axis=0)
 
-    class_prediction = class_prediction.reshape(img[:, :, 0].shape)
+        # Reshape the prediction back to the original image layout
+        class_prediction = class_prediction.reshape(img[:, :, 0].shape)
 
-    mask = np.copy(img[:, :, 0])
-    mask[mask > 0.0] = 1.0
+        # Apply mask
+        mask = (img_temp[:, :, 0] > 0).astype(np.float32)
+        class_prediction_ = class_prediction * mask
 
-    class_prediction_ = class_prediction * mask
+        # Save the classified image
+        output_file = os.path.join(output_folder, f"ME_classified_masked_{id_value}.tif")
+        cols, rows = img.shape[1], img.shape[0]
+        driver = gdal.GetDriverByName("GTiff")
+        outdata = driver.Create(output_file, cols, rows, 1, gdal.GDT_UInt16)
+        outdata.SetGeoTransform(img_ds.GetGeoTransform())
+        outdata.SetProjection(img_ds.GetProjection())
+        outdata.GetRasterBand(1).WriteArray(class_prediction_)
+        outdata.FlushCache()
 
-    # Save the classification image
-    output_file = os.path.join(output_folder, f"ME_classified_masked_{id_value}.tif")
+        print(f'Image {index} of {len(img_path_list)} saved to: {output_file}')
 
-    cols, rows = img.shape[1], img.shape[0]
-    driver = gdal.GetDriverByName("GTiff")
-    outdata = driver.Create(output_file, cols, rows, 1, gdal.GDT_UInt16)
-    outdata.SetGeoTransform(img_ds.GetGeoTransform())
-    outdata.SetProjection(img_ds.GetProjection())
-    outdata.GetRasterBand(1).WriteArray(class_prediction_)
-    outdata.FlushCache()
-
-    print(f'Image {index} of {len(img_path_list)} saved to: {output_file}')
+        # Clean up
+        del img_ds_temp, img_temp, img_as_array, class_prediction, class_prediction_, mask
+        outdata = None
+        os.remove(filename)  # Delete the temporary file
 
 # ### Section - Accuracy Assessment
 
