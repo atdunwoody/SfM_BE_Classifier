@@ -1,4 +1,11 @@
+#Setting GDAL_DATA environment variable, change the path to your own GDAL_DATA folder
+import os
+gdal_data_path = 'C:/ProgramData/miniconda3/envs/GIStools/Library/share/gdal'
+os.environ['GDAL_DATA'] = gdal_data_path
 from osgeo import gdal, gdal_array
+gdal.UseExceptions()
+gdal.AllRegister()
+
 from pathlib import Path
 import rasterio
 from rasterio.mask import mask
@@ -6,14 +13,13 @@ from rasterio.windows import from_bounds
 import geopandas as gpd
 
 import numpy as np
-import os
+
 import geopandas as gpd
 import matplotlib.pyplot as plt # plot figures
 
-
+import richdem as rd
 # Tell GDAL to throw Python exceptions, and register all drivers
-gdal.UseExceptions()
-gdal.AllRegister()
+
 
 
 
@@ -97,7 +103,8 @@ def mask_rasters_by_shapefile(raster_paths, shapefile_path, output_folder, id_va
         shapes_geometry = shapes.geometry.values
 
         # Create a subfolder for each id_value
-        id_specific_output_folder = Path(output_folder) / f"Masked_{id_value}"
+        id_specific_output_folder = Path(output_folder) #/ f"Masked_{id_value}"
+       
         id_specific_output_folder.mkdir(parents=True, exist_ok=True)
 
         masked_rasters_for_id = []
@@ -132,7 +139,7 @@ def mask_rasters_by_shapefile(raster_paths, shapefile_path, output_folder, id_va
     return raster_outputs
 
 
-def split_bands(input_raster, output_prefix, output_path):
+def split_bands(input_raster, output_prefix, output_path, pop=False):
     """
     Split a multi-band raster into individual band files, retaining the projection and geotransform.
 
@@ -147,7 +154,8 @@ def split_bands(input_raster, output_prefix, output_path):
     geotransform = ds.GetGeoTransform()
     projection = ds.GetProjection()
     output_files = []
-
+    if pop:
+        band_count = band_count - 1
     # Ensure output directory exists
     Path(output_path).mkdir(parents=True, exist_ok=True)
 
@@ -205,7 +213,7 @@ def stack_bands(input_raster_list):
         raster_ds = gdal.Open(raster_path)
         band = raster_ds.GetRasterBand(1)
         out_ds.GetRasterBand(i).WriteArray(band.ReadAsArray())
-        print(f"Band {i} of ", len(input_raster_list), " stacked")
+        print(f"Band {i} of ", len(input_raster_list), " stacked " "Path: ", raster_path)   
 
     # Close datasets
     src_ds = None
@@ -279,54 +287,9 @@ def processRGB(RGB_Path):
     EGI_dataset = None
     Sat_dataset = None
 
-    print("Processing completed.")
-    return [EGI_output, Sat_output]
+    print("EGI and Saturation rasters created.")
+    return [Sat_output, EGI_output]
 
-def compute_roughness(dem_path, output_path, max_roughness=None):
-    """
-    Compute the roughness of a DEM and save the result to a new raster file.
-
-    Parameters:
-    dem_path (str): Path to the input DEM file.
-    output_path (str): Path to save the output roughness raster.
-    max_roughness (float, optional): Maximum roughness value to filter the output raster.
-    """
-    # Open the DEM file
-    dem_ds = gdal.Open(dem_path)
-    if not dem_ds:
-        print("Failed to open DEM file.")
-        return
-
-    # Read DEM data
-    dem_array = dem_ds.ReadAsArray()
-    x_size, y_size = dem_array.shape
-
-    # Initialize roughness array
-    roughness_array = np.zeros_like(dem_array, dtype=np.float32)
-
-    # Calculate roughness
-    for i in range(1, x_size - 1):
-        for j in range(1, y_size - 1):
-            window = dem_array[i - 1:i + 2, j - 1:j + 2]
-            roughness_array[i, j] = np.abs(window[1, 1] - np.mean(window))
-
-    # Apply max roughness filter if specified
-    if max_roughness is not None:
-        roughness_array[roughness_array > max_roughness] = max_roughness
-
-    # Create output dataset
-    driver = gdal.GetDriverByName('GTiff')
-    out_ds = driver.Create(output_path, y_size, x_size, 1, gdal.GDT_Float32)
-    out_ds.SetGeoTransform(dem_ds.GetGeoTransform())
-    out_ds.SetProjection(dem_ds.GetProjection())
-
-    # Write roughness array to output dataset
-    out_band = out_ds.GetRasterBand(1)
-    out_band.WriteArray(roughness_array)
-    out_band.FlushCache()
-    out_ds = None
-
-    print(f"Roughness raster saved to: {output_path}")
 
 def match_dem_resolution(source_dem_path, target_dem_path, output_path):
     """
@@ -337,6 +300,10 @@ def match_dem_resolution(source_dem_path, target_dem_path, output_path):
     target_dem_path (str): Path to the target DEM file with the desired resolution.
     output_path (str): Path where the output DEM with matched resolution will be saved.
     """
+    
+    output_dir = os.path.dirname(output_path)
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
     # Open the source and target DEMs
     source_ds = gdal.Open(source_dem_path)
     target_ds = gdal.Open(target_dem_path)
@@ -364,6 +331,62 @@ def match_dem_resolution(source_dem_path, target_dem_path, output_path):
 
     print(f"Resampled DEM saved to: {output_path}")
 
+def preprocess_function(shapefile_path, ortho_filepath, roughness_filepath, grid_ids, output_folder):
+    """
+    Preprocess ortho and roughness data for specified grid cells for RF classification.
+
+    Parameters:
+    shapefile_path (str): Filepath to the shapefile with grid indices.
+    ortho_filepath (str): Filepath to the entire extent orthomosaic.
+    roughness_filepath (str): Filepath to the entire extent roughness raster.
+    grid_ids (list of int): List of IDs of the grid cells to process.
+    output_folder (str): Folder path to save processed outputs.
+    """
+    # Ensure output folder exists
+    Path(output_folder).mkdir(parents=True, exist_ok=True)
+
+    outputs = {}
+
+    for grid_id in grid_ids:
+        # Create a subfolder for each grid ID
+        grid_output_folder = os.path.join(output_folder, f'Grid_{grid_id}')
+        Path(grid_output_folder).mkdir(parents=True, exist_ok=True)
+
+        # Step 3: Mask ortho and roughness rasters by shapefile
+        masked_rasters = mask_rasters_by_shapefile([ortho_filepath, roughness_filepath], shapefile_path, grid_output_folder, [grid_id])
+        masked_ortho = masked_rasters[grid_id][0]  # Assuming ortho raster is first in the list
+
+        # Step 4: Split bands of the ortho raster
+       
+        rgb_bands = split_bands(masked_ortho, 'ortho', grid_output_folder, pop =True)
+        print("RGB: ", rgb_bands)
+        # Step 5: Process RGB bands
+        processed_rgb = processRGB(rgb_bands)
+        print("SAT & EGI: ", processed_rgb)
+        # Step 6: Append processed RGB to list
+        rgb_bands.extend(processed_rgb)
+        rasters_to_stack = rgb_bands
+        print("Rasters to stack: ", rasters_to_stack)
+
+        # Step 7: Clip roughness raster by RGB shapefile
+        
+        clipped_roughness = clip_rasters_by_extent([masked_rasters[grid_id][1]], masked_ortho)[0]
+
+        # Step 8: Match DEM resolution
+        matched_roughness_path = os.path.join(grid_output_folder, 'matched_roughness.tif')
+        match_dem_resolution(clipped_roughness, masked_ortho, matched_roughness_path)
+        matched_roughness_path = [matched_roughness_path]
+        # Step 9: Append roughness to raster list
+        matched_roughness_path.extend(rasters_to_stack)
+
+        # Step 10: Stack bands
+        stacked_output = stack_bands(matched_roughness_path)
+
+        outputs[grid_id] = stacked_output
+
+    return outputs
+
+
 def main():
    
     # List of raster file paths
@@ -384,7 +407,7 @@ def main():
     
      
     clipper = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 10 Tiles\clipper.shp"
-    output_folder = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs"
+    output_folder = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Inputs_Automated"
     
     raster_paths =[r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Roughness.tif",
                     r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\R.tif",
@@ -396,16 +419,24 @@ def main():
     
     # Example usage
     # Example usage
-    ortho_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Masked_38\ME_Ortho_Spring2023_v1_masked_38.tif"
-    dem_path = [r"Z:\ATD\Drone Data Processing\Metashape Exports\Bennett\ME\11-4-23\ME_DEM_Spring2023_3.54cm_v1.tif"]
+    ortho_path = r"Z:\ATD\Drone Data Processing\Metashape Exports\Bennett\ME\11-4-23\ME_Ortho_Spring2023_v1.tif"
+    r_path = r"Z:\ATD\Drone Data Processing\Metashape Exports\Bennett\ME\11-4-23\Roughness_Filtered.tif"
     #ME valid ID values also include 2, 3, 15, 21, 38
     #id_values = [4, 7, 8, 9, 10, 13, 14, 16, 17, 20, 22, 23, 25, 26, 27, 28, 29, 31, 32, 33, 34, 35, 37, 39, 43, 44]  # List of id values for masking
-    id_values=[38]
+    grid_id=[15,38]
     #masked_rasters = mask_rasters_by_shapefile(dem_path, shapefile_path, output_folder, id_values, stack = False)
+    r_output = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Masked_38\ME_DEM_Spring2023_3.54cm_v1_masked_38.tif"
+    r_res_output = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Roughness-py-1.77.tif"
+    
+    
+    #match_dem_resolution(r_output, raster_paths[0], r_res_output)
+    preprocess_function(shapefile_path, ortho_path, r_path, grid_id, output_folder)
+    
+    
     #split = split_bands(ortho_path, "split_", output_folder)
     #processRGB(split)
     #masked_list = mask_rasters_by_shapefile(raster_paths, shapefile_path, output_folder, id_value=polygon_id)
-    op_stack = stack_bands(raster_paths)
+    #op_stack = stack_bands(raster_paths)
     #print(op_stack)
     
 if __name__ == '__main__':

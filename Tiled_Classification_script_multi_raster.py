@@ -27,6 +27,8 @@ gdal.AllRegister()
 
 # the remote sensing image you want to classify
 # define a number of trees that should be used (default = 500)
+
+# define a number of trees that should be used (default = 500)
 est = 300
 
 # how many cores should be used?
@@ -34,26 +36,28 @@ est = 300
 n_cores = -1
 
 # the remote sensing image you want to classify
-img_RS = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 11 Grid\Inputs\Masks_38\stacked_bands_output.tif"
+img_RS = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Inputs_Automated\Grid_38\stacked_bands_output.tif"
 
-
+#prediction tile
+#img_LS = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Inputs_Automated\Grid_15\stacked_bands_output.tif"
 # training and validation as shape files
 training = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Training.shp"
-validation = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Validation.shp"
+validation = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Results\Results_expanded_shapes\Training-Validation Shapes\Validation.shp"
 
 # what is the attributes name of your classes in the shape file (field name of the classes)?
 attribute = 'id'
 
-img_path_list = ['path_to_image1.tif', 'path_to_image2.tif']  # Replace with actual paths
-id_values = [1, 2, 3]  # Replace with actual ID values
-
-output_folder = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 11 Grid\ME_classified"
-
 # directory, where the classification image should be saved:
-classification_image = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 11 Grid\ME_classified.tif"
+
+img_path_list = [r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Inputs_Automated\Grid_15\stacked_bands_output.tif",r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Inputs_Automated\Grid_38\stacked_bands_output.tif"]  # Replace with actual paths
+id_values = [15, 38]  # Replace with actual ID values
+
+output_folder = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Results\Results_Auto_Multiple"
+
+classification_image = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Results\Results_expanded_shapes\ME_RF_Classified_expanded_validation.tif"
 
 # directory, where the all meta results should be saved:
-results_txt = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 11 Grid\ME_RF_results.txt"
+results_txt = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Results\Results_expanded_shapes\ME_RF_Results_expanded_validation.txt"
 
 
 # In[4]:
@@ -158,7 +162,7 @@ plt.subplot(122)
 plt.imshow(roi, cmap=plt.cm.Spectral)
 plt.title('Training Image')
 
-plt.show()
+
 
 # Number of training pixels:
 n_samples = (roi > 0).sum()
@@ -235,7 +239,7 @@ plt.figure(figsize=(10,7))
 sn.heatmap(cm, annot=True, fmt='g')
 plt.xlabel('classes - predicted')
 plt.ylabel('classes - truth')
-plt.show()
+
 
 
 
@@ -248,14 +252,14 @@ for index, (img_path, id_value) in enumerate(zip(img_path_list, id_values), star
     
     output_file = os.path.join(output_folder, f"ME_classified_masked_{id_value}.tif")
     img_ls = gdal.Open(img_path, gdal.GA_ReadOnly)
-
+    print(img_path, " id_value: ", id_value)
     img = np.zeros((img_ls.RasterYSize, img_ls.RasterXSize, img_ls.RasterCount),
                    gdal_array.GDALTypeCodeToNumericTypeCode(img_ls.GetRasterBand(1).DataType))
     for b in range(img.shape[2]):
         img[:, :, b] = img_ls.GetRasterBand(b + 1).ReadAsArray()
 
     new_shape = (img.shape[0] * img.shape[1], img.shape[2])
-    img_as_array = img[:, :, :np.int(img.shape[2])].reshape(new_shape)
+    img_as_array = img[:, :, :int(img.shape[2])].reshape(new_shape)
 
     img_as_array = np.nan_to_num(img_as_array)
 
@@ -353,7 +357,7 @@ plt.subplot(224)
 plt.imshow(roi_v, cmap=plt.cm.Spectral)
 plt.title('Validation Data')
 
-plt.show()
+
 
 
 # Find how many non-zero entries we have -- i.e. how many validation data samples?
@@ -406,4 +410,3 @@ plt.figure(figsize=(10,7))
 sn.heatmap(cm_val, annot=True, fmt='g')
 plt.xlabel('classes - predicted')
 plt.ylabel('classes - truth')
-plt.show()
