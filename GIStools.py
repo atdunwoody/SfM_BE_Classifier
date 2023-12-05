@@ -181,7 +181,7 @@ def split_bands(input_raster, output_prefix, output_path, pop=False):
     ds = None  # Close the input file
     return output_files
 
-def stack_bands(input_raster_list):
+def stack_bands(input_raster_list, output_path=None, suffix = None):
     """
     Stack multiple single-band rasters into a multi-band raster.
 
@@ -190,11 +190,15 @@ def stack_bands(input_raster_list):
     """
     if not input_raster_list:
         raise ValueError("Input raster list is empty")
-
-    # Determine the base directory from the first input raster
-    base_dir = Path(input_raster_list[0]).parent
-    output_file = base_dir / "stacked_bands_output.tif"
-
+    if not output_path:
+        # Determine the base directory from the first input raster
+        base_dir = Path(input_raster_list[0]).parent
+        output_file = base_dir / "stacked_bands_output.tif"
+    else:
+        #create output folder if it does not exist
+        Path(output_path).mkdir(parents=True, exist_ok=True)
+        #Add suffix to output file name
+        output_file = Path(output_path) / f"stacked_bands_output_{suffix}.tif"
     # Open the first file to get the projection and geotransform
     src_ds = gdal.Open(input_raster_list[0])
     geotransform = src_ds.GetGeoTransform()
@@ -271,9 +275,9 @@ def processRGB(RGB_Path):
     Sat_dataset = create_output_dataset(Sat_output, x_size, y_size, geotransform, projection)
 
     # Read entire image for each band
-    R_array = r_dataset.ReadAsArray().astype(np.float64) / 255
-    G_array = g_dataset.ReadAsArray().astype(np.float64) / 255
-    B_array = b_dataset.ReadAsArray().astype(np.float64) / 255
+    R_array = r_dataset.ReadAsArray().astype(np.float32) / 255
+    G_array = g_dataset.ReadAsArray().astype(np.float32) / 255
+    B_array = b_dataset.ReadAsArray().astype(np.float32) / 255
 
     # Process entire image
     EGI_array = np.multiply(G_array, 3) - 1
@@ -286,7 +290,15 @@ def processRGB(RGB_Path):
     # Close datasets
     EGI_dataset = None
     Sat_dataset = None
-
+    r_dataset = None
+    g_dataset = None
+    b_dataset = None
+    R_array = None
+    G_array = None
+    B_array = None
+    EGI_array = None
+    Saturation_array = None
+    
     print("EGI and Saturation rasters created.")
     return [Sat_output, EGI_output]
 
@@ -359,10 +371,9 @@ def preprocess_function(shapefile_path, ortho_filepath, roughness_filepath, grid
         # Step 4: Split bands of the ortho raster
        
         rgb_bands = split_bands(masked_ortho, 'ortho', grid_output_folder, pop =True)
-        print("RGB: ", rgb_bands)
+        print("Proccessing RGB Bands...")
         # Step 5: Process RGB bands
         processed_rgb = processRGB(rgb_bands)
-        print("SAT & EGI: ", processed_rgb)
         # Step 6: Append processed RGB to list
         rgb_bands.extend(processed_rgb)
         rasters_to_stack = rgb_bands
@@ -380,35 +391,25 @@ def preprocess_function(shapefile_path, ortho_filepath, roughness_filepath, grid
         matched_roughness_path.extend(rasters_to_stack)
 
         # Step 10: Stack bands
-        stacked_output = stack_bands(matched_roughness_path)
+        output_folder_stacked = os.path.join(output_folder,"Tiled_Inputs")
+        stacked_output = stack_bands(matched_roughness_path, output_folder_stacked, suffix = grid_id)
 
         outputs[grid_id] = stacked_output
-
+        #Close datasets
+        masked_rasters = None
+        processed_rgb = None
+        rgb_bands = None
+        rasters_to_stack = None
     return outputs
 
 
 def main():
-   
-    # List of raster file paths
-    #ortho_path = r"Z:\ATD\Drone Data Processing\Metashape Exports\Bennett\ME\11-4-23\ME_Ortho_Spring2023_v1.tif"
-    #output_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 9 Large\Inputs"
-    #raster_paths = split_bands(ortho_path, 'Test_v1', output_path)
-    #drop the last band in raster_paths
-    #raster_paths.pop()
     RGB_path = [r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 9 Large\Inputs\R.tif",
                 r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 9 Large\Inputs\G.tif",
                 r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 9 Large\Inputs\B.tif"]
     #preprocessed_list = processRGB(RGB_path)
-    
-    # Example usage
-    shapefile_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 11 Grid\grid_300x300m.shp"
-    polygon_id = 11  # Replace with the id of the polygon you want to extract
+   
 
-    
-     
-    clipper = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 10 Tiles\clipper.shp"
-    output_folder = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Inputs_Automated"
-    
     raster_paths =[r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Results\Results_LDA\ME_classified_masked.tif",
                     r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Inputs_Automated\Grid_38\Saturation.tif",
                     r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Inputs_Automated\Grid_38\Roughness_Filtered_masked_38_clipped.tif",
@@ -417,27 +418,14 @@ def main():
                     r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Inputs_Automated\Grid_38\orthoband_1.tif",
                     r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Inputs_Automated\Grid_38\EGI.tif"]
     
-    # Example usage
-    # Example usage
+    shapefile_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 11 Grid\grid_300x300m.shp"
     ortho_path = r"Z:\ATD\Drone Data Processing\Metashape Exports\Bennett\ME\11-4-23\ME_Ortho_Spring2023_v1.tif"
     r_path = r"Z:\ATD\Drone Data Processing\Metashape Exports\Bennett\ME\11-4-23\Roughness_Filtered.tif"
+    output_folder = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Inputs_Automated"
     #ME valid ID values also include 2, 3, 15, 21, 38
-    #id_values = [4, 7, 8, 9, 10, 13, 14, 16, 17, 20, 22, 23, 25, 26, 27, 28, 29, 31, 32, 33, 34, 35, 37, 39, 43, 44]  # List of id values for masking
-    grid_id=[15,38]
-    #masked_rasters = mask_rasters_by_shapefile(dem_path, shapefile_path, output_folder, id_values, stack = False)
-    r_output = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Masked_38\ME_DEM_Spring2023_3.54cm_v1_masked_38.tif"
-    r_res_output = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Roughness-py-1.77.tif"
-    
-    
-    #match_dem_resolution(r_output, raster_paths[0], r_res_output)
-    #preprocess_function(shapefile_path, ortho_path, r_path, grid_id, output_folder)
-    
-    
-    #split = split_bands(ortho_path, "split_", output_folder)
-    #processRGB(split)
-    #masked_list = mask_rasters_by_shapefile(raster_paths, shapefile_path, output_folder, id_value=polygon_id)
-    op_stack = stack_bands(raster_paths)
-    #print(op_stack)
+    #grid_id = [3, 4, 7, 8, 9, 10, 13, 14, 16, 17, 20, 21, 22, 23, 25, 26, 27, 28, 29, 31, 32, 33, 34, 35, 37, 39, 43, 44]  # List of id values for masking
+    grid_id=[33, 34, 35, 37, 39, 43, 44]
+    preprocess_function(shapefile_path, ortho_path, r_path, grid_id, output_folder)
     
 if __name__ == '__main__':
     main()
