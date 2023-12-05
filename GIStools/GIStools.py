@@ -343,50 +343,7 @@ def match_dem_resolution(source_dem_path, target_dem_path, output_path):
 
     print(f"Resampled DEM saved to: {output_path}")
 
-def find_diff_rasters(folder_path):
-    """
-    Return a list of DEM files in a folder that have a different width or height 
-    than the first DEM file in the list.
 
-    Parameters:
-    folder_path (str): Path to the folder containing the DEM files.
-
-    Returns:
-    list of str: List of file names with different dimensions than the first file.
-    """
-
-    first_width = None
-    first_height = None
-    different_dimension_files = []
-
-    # Loop through all files in the folder
-    for filename in os.listdir(folder_path):
-        file_path = os.path.join(folder_path, filename)
-        
-        # Check if the file is a DEM file (assuming .tif format for DEMs)
-        if file_path.lower().endswith('.tif'):
-            try:
-                # Open the DEM file
-                ds = gdal.Open(file_path)
-                if ds:
-                    # Width and height of the raster
-                    width = ds.RasterXSize
-                    height = ds.RasterYSize
-
-                    if first_width is None and first_height is None:
-                        # This is the first file, set the base dimensions
-                        first_width = width
-                        first_height = height
-                    else:
-                        # Compare dimensions with the first file
-                        if width != first_width or height != first_height:
-                            different_dimension_files.append(file_path)
-                else:
-                    print(f"Failed to open DEM file: {filename}")
-            except Exception as e:
-                print(f"Error processing file {filename}: {e}")
-
-    return different_dimension_files
 
 def preprocess_function(shapefile_path, ortho_filepath, roughness_filepath, grid_ids, output_folder):
     """
