@@ -1,4 +1,7 @@
 # packages
+import gc
+# Force a garbage collection (useful in long-running scripts or notebooks)
+gc.collect()
 import os, tempfile
 from osgeo import gdal, ogr, gdal_array # I/O image data
 import numpy as np # math and array handling
@@ -21,8 +24,39 @@ gdal.AllRegister()
 # In[3]:
 
 #-------------------INPUTS-------------------#
+def find_files(directory, file_name = None):
+    """
+    Recursively searches for files named 'stacked_bands_output.tif' in the given directory
+    and all its subdirectories, and appends their paths to a list.
 
+    Args:
+    directory (str): The directory to search in.
 
+    Returns:
+    list: A list of paths to the found files.
+    """
+    found_files = []
+    suffix_list = []
+    # Walk through the directory and its subdirectories
+    
+    
+    for root, dirs, files in os.walk(directory):
+        #Code to skip over specific subfolders
+        #if dirs == 'Tiled_Inputs':
+            #continue
+        for file in files:
+            #do not pull from directory folder "Tiled Inputs"
+            if file_name == None:
+                full_path = os.path.join(root, file)
+                found_files.append(full_path)
+                #extract last two characters of the file name
+                suffix = file[-6:-4]
+                suffix_list.append(suffix)
+            if file == file_name:
+                full_path = os.path.join(root, file)
+                found_files.append(full_path)
+
+    return found_files,suffix_list
 # define a number of trees that should be used (default = 300)
 est = 300
 
@@ -31,31 +65,41 @@ est = 300
 n_cores = -1
 
 # grid-clipped-image containing the training data
-img_RS = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Results\Results_LDA\stacked_bands_output.tif"
-print('Image to classify: {}'.format(img_RS))
+img_RS = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Inputs_Automated\Tiled_Inputs_v2\Tile_38.tif"
+print('Training Image: {}'.format(img_RS))
 # training and validation as shape files
-training = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Results\Results_expanded_shapes - v2\Training-Validation Shapes\Training.shp"
+training = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Training.shp"
 validation = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Results\Results_expanded_shapes - v2\Training-Validation Shapes\Validation.shp"
 
 # what is the attributes name of your classes in the shape file (field name of the classes)?
 attribute = 'id'
 
 #List of grid-clipped images to classify and associated id values
-img_path_list = [r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Inputs_Automated\Grid_15\stacked_bands_output.tif"]  # Replace with actual paths
-id_values = [15]  # match order of id values to image paths
+out_dir =r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Inputs_Automated\Tiled_Inputs_v2"
+out_dir2 =r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Inputs_Automated\Tiled_Inputs"
+inputs1, suffix1 = find_files(out_dir)
+inputs2, suffix2 = find_files(out_dir2)
+img_path_list = inputs1 + inputs2
+
+#img_path_list = [r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Inputs_Automated\Grid_15\stacked_bands_output.tif"]  # Replace with actual paths
+id_values = suffix1 + suffix2  # match order of id values to image paths
+
+del img_path_list[0:11]
+del id_values[0:11]
 
 # directory, where the classification image should be saved:
-output_folder = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Results\RF_LDA"
+output_folder = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Results\ME_2023_Full_Run"
 if not os.path.exists(output_folder):
     os.makedirs(output_folder)
     
 #output folder for list of img_path_list grid-clipped classified images
-classification_image = os.path.join(output_folder, 'ME_classified_masked.tif')
+classification_image = os.path.join(output_folder, 'ME_Training_classified.tif')
 
 # directory, where the all meta results should be saved:
 results_txt = os.path.join(output_folder, 'ME_results.txt')
 
 process_multiple = True
+validate = False
 
 # In[4]:
 
@@ -81,16 +125,18 @@ print('Available attributes in the shape file are: {}'.format(attributes))
 
 # In[5]:
 #-------------------PREPARING RESULTS TEXT FILE-------------------#
-
+#Overwrite if there is an existing file
+if os.path.exists(results_txt):
+    os.remove(results_txt)
 print('Random Forest Classification', file=open(results_txt, "a"))
-print('Processing: {}'.format(datetime.datetime.now()), file=open(results_txt, "a"))
+print('Processing Start: {}'.format(datetime.datetime.now()), file=open(results_txt, "a"))
 print('-------------------------------------------------', file=open(results_txt, "a"))
 print('PATHS:', file=open(results_txt, "a"))
-print('Image: {}'.format(img_RS), file=open(results_txt, "a"))
+print('Training Tile: {}'.format(img_RS), file=open(results_txt, "a"))
 print('Training shape: {}'.format(training) , file=open(results_txt, "a"))
 print('Vaildation shape: {}'.format(validation) , file=open(results_txt, "a"))
 print('      choosen attribute: {}'.format(attribute) , file=open(results_txt, "a"))
-print('Classification image: {}'.format(classification_image) , file=open(results_txt, "a"))
+print('Classified Tiles: {}'.format(img_path_list) , file=open(results_txt, "a"))
 print('Report text file: {}'.format(results_txt) , file=open(results_txt, "a"))
 print('-------------------------------------------------', file=open(results_txt, "a"))
 
@@ -295,7 +341,7 @@ outdata.SetProjection(img_ds.GetProjection())##sets same projection as input
 outdata.GetRasterBand(1).WriteArray(class_prediction_)
 outdata.FlushCache() ##saves to disk!!
 print('Image saved to: {}'.format(classification_image))
-
+gc.collect()
 #-------------------VALIDATION-------------------#
 print('------------------------------------', file=open(results_txt, "a"))
 print('VALIDATION', file=open(results_txt, "a"))
@@ -376,7 +422,9 @@ del img_ds
 # In[17]:
 # ### Section - Prediction
 if process_multiple:
+    
     for index, (img_path, id_value) in enumerate(zip(img_path_list, id_values), start=1):
+            start_time = datetime.datetime.now()
             img_ds_temp = gdal.Open(img_path, gdal.GA_ReadOnly)
             print(f"Processing {img_path}, ID value: {id_value}")
 
@@ -406,10 +454,16 @@ if process_multiple:
                     class_preds = []
                     temp = rf.predict(img_as_array[0:slices + 1, :])
                     class_preds.append(temp)
-
+                    ctr = 0
                     for i in range(slices, len(img_as_array), slices):
-                        if (i // slices) % 10 == 0:
-                            print(f'{(i * 100) / len(img_as_array):.2f}% completed, Processing slice {i}')
+                        ctr += 1
+                        if (ctr) % 4 == 0:
+                            current_time = datetime.now()
+                            # Format the time as HH:MM:SS
+                            formatted_time = current_time.strftime("%H:%M:%S")
+                            print(f'{(i * 100) / len(img_as_array):.2f}% completed at {formatted_time}')
+
+                            print("Current Time:", formatted_time)
                         temp = rf.predict(img_as_array[i + 1:i + (slices + 1), :])
                         class_preds.append(temp)
 
@@ -438,13 +492,14 @@ if process_multiple:
             outdata.GetRasterBand(1).WriteArray(class_prediction_)
             outdata.FlushCache()
 
-            print(f'Image {index} of {len(img_path_list)} saved to: {output_file}')
+            print(f'Tile {index} of {len(img_path_list)} saved to: {output_file}')
 
             # Clean up
-            del img_ds_temp, img_temp, img_as_array, class_prediction, class_prediction_, mask
+            del img_ds_temp, temp_file, img_temp, img_as_array, class_prediction, class_prediction_, mask
             outdata = None
+            gc.collect()
             os.remove(filename)  # Delete the temporary file
+            print(f"Processing time for Tile {index}: {datetime.datetime.now() - start_time}")
 
-
-
+print('Processing End: {}'.format(datetime.datetime.now()), file=open(results_txt, "a"))
 
