@@ -1,7 +1,4 @@
-# packages
-import gc
-# Force a garbage collection (useful in long-running scripts or notebooks)
-gc.collect()
+
 import os, tempfile
 from osgeo import gdal, ogr, gdal_array # I/O image data
 import numpy as np # math and array handling
@@ -75,18 +72,15 @@ validation = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering 
 attribute = 'id'
 
 #List of grid-clipped images to classify and associated id values
-out_dir =r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Inputs_Automated\Tiled_Inputs_v2"
-out_dir2 =r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Inputs_Automated\Tiled_Inputs"
-inputs1, suffix1 = find_files(out_dir)
-inputs2, suffix2 = find_files(out_dir2)
-img_path_list = inputs1 + inputs2
+out_dir = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Inputs_Automated\Tiled_Inputs_Matched\Padded"
+img_path_list, id_values = find_files(out_dir)
 
 #img_path_list = [r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Inputs_Automated\Grid_15\stacked_bands_output.tif"]  # Replace with actual paths
-id_values = suffix1 + suffix2  # match order of id values to image paths
 
-del img_path_list[0:11]
-del id_values[0:11]
-
+del img_path_list[0:3]
+del id_values[0:3]
+print(img_path_list[0])
+print(id_values[0])
 # directory, where the classification image should be saved:
 output_folder = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Results\ME_2023_Full_Run"
 if not os.path.exists(output_folder):
@@ -270,154 +264,153 @@ sn.heatmap(cm, annot=True, fmt='g')
 plt.xlabel('classes - predicted')
 plt.ylabel('classes - truth')
 
+if validate:
+    #-------------------PREDICTION ON TRAINING IMAGE-------------------#
+    new_shape = (img.shape[0] * img.shape[1], img.shape[2])
+    img_as_array = img[:, :, :int(img.shape[2])].reshape(new_shape)
 
-#-------------------PREDICTION ON TRAINING IMAGE-------------------#
-new_shape = (img.shape[0] * img.shape[1], img.shape[2])
-img_as_array = img[:, :, :int(img.shape[2])].reshape(new_shape)
+    print('Reshaped from {o} to {n}'.format(o=img.shape, n=img_as_array.shape))
 
-print('Reshaped from {o} to {n}'.format(o=img.shape, n=img_as_array.shape))
+    img_as_array = np.nan_to_num(img_as_array)
 
-img_as_array = np.nan_to_num(img_as_array)
-
-# Now predict for each pixel on training tile
-# first prediction will be tried on the entire image
-# if not enough RAM, the dataset will be sliced
-try:
-    class_prediction = rf.predict(img_as_array)
-except MemoryError:
-    slices = int(round((len(img_as_array)/2)))
-    print("Slices: ", slices)
-    test = True
-    
-    while test == True:
-        try:
-            class_preds = list()
-            
-            temp = rf.predict(img_as_array[0:slices+1,:])
-            class_preds.append(temp)
-            
-            for i in range(slices,len(img_as_array),slices):
-                if (i // slices) % 10 == 0:
-                    print(f'{(i * 100) / len(img_as_array):.2f}% completed, Processing slice {i}')
-                temp = rf.predict(img_as_array[i+1:i+(slices+1),:])                
+    # Now predict for each pixel on training tile
+    # first prediction will be tried on the entire image
+    # if not enough RAM, the dataset will be sliced
+    try:
+        class_prediction = rf.predict(img_as_array)
+    except MemoryError:
+        slices = int(round((len(img_as_array)/2)))
+        print("Slices: ", slices)
+        test = True
+        
+        while test == True:
+            try:
+                class_preds = list()
+                
+                temp = rf.predict(img_as_array[0:slices+1,:])
                 class_preds.append(temp)
-            
-        except MemoryError as error:
-            slices = round(slices/2)
-            print('Not enought RAM, new slices = {}'.format(slices))
-            
-        else:
-            test = False
-            
-#Concatenate the list of sliced  arrays into a single array
-try:
-    class_prediction = np.concatenate(class_preds,axis = 0)
-except NameError:
-    print('No slicing was necessary!')
+                
+                for i in range(slices,len(img_as_array),slices):
+                    if (i // slices) % 10 == 0:
+                        print(f'{(i * 100) / len(img_as_array):.2f}% completed, Processing slice {i}')
+                    temp = rf.predict(img_as_array[i+1:i+(slices+1),:])                
+                    class_preds.append(temp)
+                
+            except MemoryError as error:
+                slices = round(slices/2)
+                print('Not enought RAM, new slices = {}'.format(slices))
+                
+            else:
+                test = False
+                
+    #Concatenate the list of sliced  arrays into a single array
+    try:
+        class_prediction = np.concatenate(class_preds,axis = 0)
+    except NameError:
+        print('No slicing was necessary!')
 
-# Reshape our classification map back into a 2D matrix so we can visualize it`` 
-class_prediction = class_prediction.reshape(img[:, :, 0].shape)
-print('Reshaped back to {}'.format(class_prediction.shape))
-
-
-#-------------------MASKING-------------------#
-mask = np.copy(img[:,:,0])
-mask[mask > 0.0] = 1.0 # all actual pixels have a value of 1.0
-
-# Apply mask
-class_prediction.astype(np.float16)
-class_prediction_ = class_prediction*mask
+    # Reshape our classification map back into a 2D matrix so we can visualize it`` 
+    class_prediction = class_prediction.reshape(img[:, :, 0].shape)
+    print('Reshaped back to {}'.format(class_prediction.shape))
 
 
-#--------------SAVE CLASSIFICATION IMAGE-----------------#
-cols = img.shape[1]
-rows = img.shape[0]
+    #-------------------MASKING-------------------#
+    mask = np.copy(img[:,:,0])
+    mask[mask > 0.0] = 1.0 # all actual pixels have a value of 1.0
 
-class_prediction_.astype(np.float16)
-driver = gdal.GetDriverByName("gtiff")
-outdata = driver.Create(classification_image, cols, rows, 1, gdal.GDT_UInt16)
-outdata.SetGeoTransform(img_ds.GetGeoTransform())##sets same geotransform as input
-outdata.SetProjection(img_ds.GetProjection())##sets same projection as input
-outdata.GetRasterBand(1).WriteArray(class_prediction_)
-outdata.FlushCache() ##saves to disk!!
-print('Image saved to: {}'.format(classification_image))
-gc.collect()
-#-------------------VALIDATION-------------------#
-print('------------------------------------', file=open(results_txt, "a"))
-print('VALIDATION', file=open(results_txt, "a"))
-
-# laod training data from shape file
-shape_dataset_v = ogr.Open(validation)
-shape_layer_v = shape_dataset_v.GetLayer()
-mem_drv_v = gdal.GetDriverByName('MEM')
-mem_raster_v = mem_drv_v.Create('',img_ds.RasterXSize,img_ds.RasterYSize,1,gdal.GDT_UInt16)
-mem_raster_v.SetProjection(img_ds.GetProjection())
-mem_raster_v.SetGeoTransform(img_ds.GetGeoTransform())
-mem_band_v = mem_raster_v.GetRasterBand(1)
-mem_band_v.Fill(0)
-mem_band_v.SetNoDataValue(0)
-
-# http://gdal.org/gdal__alg_8h.html#adfe5e5d287d6c184aab03acbfa567cb1
-# http://gis.stackexchange.com/questions/31568/gdal-rasterizelayer-doesnt-burn-all-polygons-to-raster
-err_v = gdal.RasterizeLayer(mem_raster_v, [1], shape_layer_v, None, None, [1],  [att_,"ALL_TOUCHED=TRUE"])
-assert err_v == gdal.CE_None
-
-roi_v = mem_raster_v.ReadAsArray()
+    # Apply mask
+    class_prediction.astype(np.float16)
+    class_prediction_ = class_prediction*mask
 
 
+    #--------------SAVE CLASSIFICATION IMAGE-----------------#
+    cols = img.shape[1]
+    rows = img.shape[0]
 
-# Find how many non-zero entries we have -- i.e. how many validation data samples?
-n_val = (roi_v > 0).sum()
-print('{n} validation pixels'.format(n=n_val))
-print('{n} validation pixels'.format(n=n_val), file=open(results_txt, "a"))
+    class_prediction_.astype(np.float16)
+    driver = gdal.GetDriverByName("gtiff")
+    outdata = driver.Create(classification_image, cols, rows, 1, gdal.GDT_UInt16)
+    outdata.SetGeoTransform(img_ds.GetGeoTransform())##sets same geotransform as input
+    outdata.SetProjection(img_ds.GetProjection())##sets same projection as input
+    outdata.GetRasterBand(1).WriteArray(class_prediction_)
+    outdata.FlushCache() ##saves to disk!!
+    print('Image saved to: {}'.format(classification_image))
+    #-------------------VALIDATION-------------------#
+    print('------------------------------------', file=open(results_txt, "a"))
+    print('VALIDATION', file=open(results_txt, "a"))
 
-# What are our validation labels?
-labels_v = np.unique(roi_v[roi_v > 0])
-print('validation data include {n} classes: {classes}'.format(n=labels_v.size, classes=labels_v))
-print('validation data include {n} classes: {classes}'.format(n=labels_v.size, classes=labels_v), file=open(results_txt, "a"))
-# Subset the classification image with the validation image = X
-# Mask the classes on the validation dataset = y
-# These will have n_samples rows
-X_v = class_prediction[roi_v > 0]
-y_v = roi_v[roi_v > 0]
+    # laod training data from shape file
+    shape_dataset_v = ogr.Open(validation)
+    shape_layer_v = shape_dataset_v.GetLayer()
+    mem_drv_v = gdal.GetDriverByName('MEM')
+    mem_raster_v = mem_drv_v.Create('',img_ds.RasterXSize,img_ds.RasterYSize,1,gdal.GDT_UInt16)
+    mem_raster_v.SetProjection(img_ds.GetProjection())
+    mem_raster_v.SetGeoTransform(img_ds.GetGeoTransform())
+    mem_band_v = mem_raster_v.GetRasterBand(1)
+    mem_band_v.Fill(0)
+    mem_band_v.SetNoDataValue(0)
 
-print('Our X matrix is sized: {sz_v}'.format(sz_v=X_v.shape))
-print('Our y array is sized: {sz_v}'.format(sz_v=y_v.shape))
+    # http://gdal.org/gdal__alg_8h.html#adfe5e5d287d6c184aab03acbfa567cb1
+    # http://gis.stackexchange.com/questions/31568/gdal-rasterizelayer-doesnt-burn-all-polygons-to-raster
+    err_v = gdal.RasterizeLayer(mem_raster_v, [1], shape_layer_v, None, None, [1],  [att_,"ALL_TOUCHED=TRUE"])
+    assert err_v == gdal.CE_None
 
-# Cross-tabulate predictions
-# confusion matrix
-convolution_mat = pd.crosstab(y_v, X_v, margins=True)
-print(convolution_mat)
-print(convolution_mat, file=open(results_txt, "a"))
-# if you want to save the confusion matrix as a CSV file:
-#savename = 'C:\\save\\to\\folder\\conf_matrix_' + str(est) + '.csv'
-#convolution_mat.to_csv(savename, sep=';', decimal = '.')
-
-# information about precision, recall, f1_score, and support:
-# http://scikit-learn.org/stable/modules/generated/sklearn.metrics.precision_recall_fscore_support.html
-#sklearn.metrics.precision_recall_fscore_support
-target_names = list()
-for name in range(1,(labels.size)+1):
-    target_names.append(str(name))
-sum_mat = classification_report(y_v,X_v,target_names=target_names)
-print(sum_mat)
-print(sum_mat, file=open(results_txt, "a"))
-
-# Overall Accuracy (OAA)
-print('OAA = {} %'.format(accuracy_score(y_v,X_v)*100))
-print('OAA = {} %'.format(accuracy_score(y_v,X_v)*100), file=open(results_txt, "a"))
+    roi_v = mem_raster_v.ReadAsArray()
 
 
-# In[20]:
+
+    # Find how many non-zero entries we have -- i.e. how many validation data samples?
+    n_val = (roi_v > 0).sum()
+    print('{n} validation pixels'.format(n=n_val))
+    print('{n} validation pixels'.format(n=n_val), file=open(results_txt, "a"))
+
+    # What are our validation labels?
+    labels_v = np.unique(roi_v[roi_v > 0])
+    print('validation data include {n} classes: {classes}'.format(n=labels_v.size, classes=labels_v))
+    print('validation data include {n} classes: {classes}'.format(n=labels_v.size, classes=labels_v), file=open(results_txt, "a"))
+    # Subset the classification image with the validation image = X
+    # Mask the classes on the validation dataset = y
+    # These will have n_samples rows
+    X_v = class_prediction[roi_v > 0]
+    y_v = roi_v[roi_v > 0]
+
+    print('Our X matrix is sized: {sz_v}'.format(sz_v=X_v.shape))
+    print('Our y array is sized: {sz_v}'.format(sz_v=y_v.shape))
+
+    # Cross-tabulate predictions
+    # confusion matrix
+    convolution_mat = pd.crosstab(y_v, X_v, margins=True)
+    print(convolution_mat)
+    print(convolution_mat, file=open(results_txt, "a"))
+    # if you want to save the confusion matrix as a CSV file:
+    #savename = 'C:\\save\\to\\folder\\conf_matrix_' + str(est) + '.csv'
+    #convolution_mat.to_csv(savename, sep=';', decimal = '.')
+
+    # information about precision, recall, f1_score, and support:
+    # http://scikit-learn.org/stable/modules/generated/sklearn.metrics.precision_recall_fscore_support.html
+    #sklearn.metrics.precision_recall_fscore_support
+    target_names = list()
+    for name in range(1,(labels.size)+1):
+        target_names.append(str(name))
+    sum_mat = classification_report(y_v,X_v,target_names=target_names)
+    print(sum_mat)
+    print(sum_mat, file=open(results_txt, "a"))
+
+    # Overall Accuracy (OAA)
+    print('OAA = {} %'.format(accuracy_score(y_v,X_v)*100))
+    print('OAA = {} %'.format(accuracy_score(y_v,X_v)*100), file=open(results_txt, "a"))
 
 
-cm_val = confusion_matrix(roi_v[roi_v > 0],class_prediction[roi_v > 0])
-plt.figure(figsize=(10,7))
-sn.heatmap(cm_val, annot=True, fmt='g')
-plt.xlabel('classes - predicted')
-plt.ylabel('classes - truth')
+    # In[20]:
 
-del img_ds
+
+    cm_val = confusion_matrix(roi_v[roi_v > 0],class_prediction[roi_v > 0])
+    plt.figure(figsize=(10,7))
+    sn.heatmap(cm_val, annot=True, fmt='g')
+    plt.xlabel('classes - predicted')
+    plt.ylabel('classes - truth')
+    
+    del img_ds
 
 # In[17]:
 # ### Section - Prediction
@@ -456,14 +449,12 @@ if process_multiple:
                     class_preds.append(temp)
                     ctr = 0
                     for i in range(slices, len(img_as_array), slices):
-                        ctr += 1
-                        if (ctr) % 4 == 0:
-                            current_time = datetime.now()
-                            # Format the time as HH:MM:SS
-                            formatted_time = current_time.strftime("%H:%M:%S")
-                            print(f'{(i * 100) / len(img_as_array):.2f}% completed at {formatted_time}')
+                        current_time = datetime.datetime.now()-start_time
+                        # Format the time as HH:MM:SS
+                        
+                        print(f'{(i * 100) / len(img_as_array):.2f}% completed' )
 
-                            print("Current Time:", formatted_time)
+                        print(f'Elapsed Time for Tile {index} of {len(img_path_list)}: ', current_time)
                         temp = rf.predict(img_as_array[i + 1:i + (slices + 1), :])
                         class_preds.append(temp)
 
@@ -497,7 +488,6 @@ if process_multiple:
             # Clean up
             del img_ds_temp, temp_file, img_temp, img_as_array, class_prediction, class_prediction_, mask
             outdata = None
-            gc.collect()
             os.remove(filename)  # Delete the temporary file
             print(f"Processing time for Tile {index}: {datetime.datetime.now() - start_time}")
 
