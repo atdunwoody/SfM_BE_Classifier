@@ -62,7 +62,7 @@ est = 300
 n_cores = -1
 
 # grid-clipped-image containing the training data
-img_RS = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Inputs_Automated\Tiled_Inputs_v2\Tile_38.tif"
+img_RS = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Spring_2023_Inputs_Automated\Tiled_Inputs_v2\Tile_38.tif"
 print('Training Image: {}'.format(img_RS))
 # training and validation as shape files
 training = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Training.shp"
@@ -72,25 +72,24 @@ validation = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering 
 attribute = 'id'
 
 #List of grid-clipped images to classify and associated id values
-out_dir = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Inputs_Automated\Tiled_Inputs_Matched\Padded"
-img_path_list, id_values = find_files(out_dir)
+in_dir = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Initial_Inputs_Automated\Tiled_Inputs"
+img_path_list, id_values = find_files(in_dir)
 
 #img_path_list = [r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Inputs_Automated\Grid_15\stacked_bands_output.tif"]  # Replace with actual paths
 
-del img_path_list[0:3]
-del id_values[0:3]
+
 print(img_path_list[0])
 print(id_values[0])
 # directory, where the classification image should be saved:
-output_folder = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Results\ME_2023_Full_Run"
+output_folder = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Results\ME_Initial_Full_Run"
 if not os.path.exists(output_folder):
     os.makedirs(output_folder)
     
 #output folder for list of img_path_list grid-clipped classified images
-classification_image = os.path.join(output_folder, 'ME_Training_classified.tif')
+classification_image = os.path.join(output_folder, 'ME_Initial_Training_classified.tif')
 
 # directory, where the all meta results should be saved:
-results_txt = os.path.join(output_folder, 'ME_results.txt')
+results_txt = os.path.join(output_folder, 'ME_Initial_results.txt')
 
 process_multiple = True
 validate = False

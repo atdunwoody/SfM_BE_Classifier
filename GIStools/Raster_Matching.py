@@ -40,20 +40,18 @@ def print_res(folder_path):
                 print(f"Error processing file {filename}: {e}")
                 
 
-def find_diff_rasters(folder_path):
+def find_diff_rasters(folder_path, target_width, target_height):
     """
-    Return a list of DEM files in a folder that have a different width or height 
-    than the first DEM file in the list.
+    Return a list of DEM files in a folder that have different dimensions than the target raster.
 
     Parameters:
     folder_path (str): Path to the folder containing the DEM files.
+    target_width (int): Target width of the raster.
+    target_height (int): Target height of the raster.
 
     Returns:
-    list of str: List of file names with different dimensions than the first file.
+    list of str: List of file names with different dimensions than the target raster.
     """
-
-    first_width = None
-    first_height = None
     different_dimension_files = []
 
     # Loop through all files in the folder
@@ -70,14 +68,9 @@ def find_diff_rasters(folder_path):
                     width = ds.RasterXSize
                     height = ds.RasterYSize
 
-                    if first_width is None and first_height is None:
-                        # This is the first file, set the base dimensions
-                        first_width = width
-                        first_height = height
-                    else:
-                        # Compare dimensions with the first file
-                        if width != first_width or height != first_height:
-                            different_dimension_files.append(filename)
+                    # Compare dimensions with the target raster
+                    if width != target_width or height != target_height:
+                        different_dimension_files.append(filename)
                 else:
                     print(f"Failed to open DEM file: {filename}")
             except Exception as e:
@@ -86,7 +79,7 @@ def find_diff_rasters(folder_path):
     return different_dimension_files
 
 
-def extend_rasters(source_rasters_paths, target_raster_path, output_rasters_dir, pad_value=0):
+def pad_rasters(source_rasters_paths, target_raster_path, output_rasters_dir, pad_value=0):
     """
     Extends each source raster in the list to match the width and height of the target raster.
 
@@ -158,65 +151,79 @@ def find_largest_dimensions(rasters):
 
     return max_width, max_height
 
-def trim_raster(raster, row):
+def trim_raster(raster, target_width, target_height):
     """
-    Removes the first row of a raster.
+    Trims a raster to match the target raster's dimensions.
 
     Parameters:
-    raster (numpy array): A 2D numpy array representing the raster.
+    raster (numpy array): A 3D numpy array representing the raster.
+    target_width (int): Target width of the raster.
+    target_height (int): Target height of the raster.
 
     Returns:
-    numpy array: The raster with the first row removed.
+    numpy array: The trimmed raster.
     """
     if raster.ndim != 3:
         raise ValueError("Input must be a 3D multiband raster.")
 
+    # Calculate the new dimensions
+    new_height = min(raster.shape[1], target_height)
+    new_width = min(raster.shape[2], target_width)
 
-    return raster[:, :, 1:]  # Remove the first column
+    return raster[:, :new_height, :new_width]
 
-def call_trim(folder, output, row=True):
-    for filename in os.listdir(folder):
+def call_trim(folder, output, target_raster_path):
+    # Read the target raster dimensions
+    with rasterio.open(target_raster_path) as target_raster:
+        target_width, target_height = target_raster.width, target_raster.height
+
+    # Find rasters that need trimming
+    rasters_to_trim = find_diff_rasters(folder, target_width, target_height)
+
+    for filename in rasters_to_trim:
         print('Processing: ', filename)
         file_path = os.path.join(folder, filename)
-        if file_path.lower().endswith('.tif'):
-            with rasterio.open(file_path) as src:
-                src_data = src.read()  # Read all bands
-                src_meta = src.meta
+        
+        with rasterio.open(file_path) as src:
+            src_data = src.read()  # Read all bands
+            src_meta = src.meta
 
-                # Modify the raster data
-                src_data = trim_raster(src_data, row)
+            # Trim the raster
+            src_data = trim_raster(src_data, target_width, target_height)
 
-                # Update the metadata to reflect the new dimensions
-                src_meta.update({
-                    'width': src_meta['width'] - 1
-                })
+            # Update the metadata to reflect the new dimensions
+            src_meta.update({
+                'width': src_data.shape[2],
+                'height': src_data.shape[1]
+            })
 
-                output_raster_path = f"{output}/{filename.split('/')[-1].replace('.tif', '_matched.tif')}"
-                print('Writing: ', output_raster_path)
+            output_raster_path = os.path.join(output, filename.replace('.tif', '_trimmed.tif'))
+            print('Writing: ', output_raster_path)
 
-                with rasterio.open(output_raster_path, 'w', **src_meta) as out_raster:
-                    out_raster.write(src_data)
-                print(print_res(output))
+            with rasterio.open(output_raster_path, 'w', **src_meta) as out_raster:
+                out_raster.write(src_data)
+            print('Finished processing', filename)
 
 def main():
-    folder = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Inputs_Automated\Tiled_Inputs"
+    folder = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Initial_Inputs_Automated\Tiled_Inputs"
     
 
 
     source = [
-    r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Inputs_Automated\Tiled_Inputs_Matched\Tile_23.tif",
-    r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Inputs_Automated\Tiled_Inputs_Matched\Tile_29.tif"]
+    r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Initial_Inputs_Automated\Tiled_Inputs\stacked_bands_output_43.tif",
+    r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Initial_Inputs_Automated\Tiled_Inputs\stacked_bands_output_44.tif"]
 
    
-    target = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Inputs_Automated\Tiled_Inputs_v2\Tile_38.tif"
-    output = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Inputs_Automated\Tiled_Inputs_Matched\Padded"
+    target = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Initial_Inputs_Automated\Tiled_Inputs\stacked_bands_output_26.tif"
+    output = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Initial_Inputs_Automated\Tiled_Inputs\Modified"
 
    
    
-    #extend_rasters(source, target, output, pad_value=0)
-    #print(print_res(output))
-    call_trim(folder, output, row=False)
-
+    #pad_rasters(source, target, output, pad_value=0)
+    print(print_res(output))
+    #call_trim(folder, output, target)
+    
+    
 if __name__ == "__main__":
     main()
 
