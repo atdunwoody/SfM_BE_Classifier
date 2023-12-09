@@ -19,41 +19,31 @@ gdal.AllRegister()
 
 
 # In[3]:
-
-#-------------------INPUTS-------------------#
-def find_files(directory, file_name = None):
-    """
-    Recursively searches for files named 'stacked_bands_output.tif' in the given directory
-    and all its subdirectories, and appends their paths to a list.
-
-    Args:
-    directory (str): The directory to search in.
-
-    Returns:
-    list: A list of paths to the found files.
-    """
+    
+def find_files(directory, file_name=None):
     found_files = []
     suffix_list = []
-    # Walk through the directory and its subdirectories
-    
-    
-    for root, dirs, files in os.walk(directory):
-        #Code to skip over specific subfolders
-        #if dirs == 'Tiled_Inputs':
-            #continue
-        for file in files:
-            #do not pull from directory folder "Tiled Inputs"
-            if file_name == None:
-                full_path = os.path.join(root, file)
-                found_files.append(full_path)
-                #extract last two characters of the file name
-                suffix = file[-6:-4]
-                suffix_list.append(suffix)
-            if file == file_name:
-                full_path = os.path.join(root, file)
-                found_files.append(full_path)
 
-    return found_files,suffix_list
+    for root, dirs, files in os.walk(directory):
+        # Code to skip over specific subfolders
+        # if 'Tiled_Inputs' in dirs:
+        #     dirs.remove('Tiled_Inputs')  # This will skip the 'Tiled_Inputs' directory
+
+        for file in files:
+            # Check if the file is a .tif file
+            if file.lower().endswith('.tif'):
+                # Do not pull from directory folder "Tiled Inputs"
+                if file_name is None:
+                    full_path = os.path.join(root, file)
+                    found_files.append(full_path)
+                    # Extract last two characters of the file name
+                    suffix = file[-6:-4]
+                    suffix_list.append(suffix)
+                elif file == file_name:
+                    full_path = os.path.join(root, file)
+                    found_files.append(full_path)
+
+    return found_files, suffix_list
 # define a number of trees that should be used (default = 300)
 est = 300
 
@@ -77,9 +67,12 @@ img_path_list, id_values = find_files(in_dir)
 
 #img_path_list = [r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Inputs_Automated\Grid_15\stacked_bands_output.tif"]  # Replace with actual paths
 
+del img_path_list[0:28]
+del id_values[0:28]
 
-print(img_path_list[0])
-print(id_values[0])
+
+print(img_path_list)
+print(id_values)
 # directory, where the classification image should be saved:
 output_folder = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Results\ME_Initial_Full_Run"
 if not os.path.exists(output_folder):
@@ -137,6 +130,7 @@ print('-------------------------------------------------', file=open(results_txt
 # In[6]:
 #-------------------IMAGE DATA EXTRACTION-------------------#
 
+print('Extracting image data from: {}'.format(img_RS))
 img_ds = gdal.Open(img_RS, gdal.GA_ReadOnly)
 
 img = np.zeros((img_ds.RasterYSize, img_ds.RasterXSize, img_ds.RasterCount),
@@ -450,15 +444,14 @@ if process_multiple:
                     for i in range(slices, len(img_as_array), slices):
                         current_time = datetime.datetime.now()-start_time
                         # Format the time as HH:MM:SS
-                        
-                        print(f'{(i * 100) / len(img_as_array):.2f}% completed' )
-
-                        print(f'Elapsed Time for Tile {index} of {len(img_path_list)}: ', current_time)
+                        print(f'Processing Tile {index} of {len(img_path_list)}. Elasped time for current tile : ', current_time)
                         temp = rf.predict(img_as_array[i + 1:i + (slices + 1), :])
                         class_preds.append(temp)
-
+                        print(f'{(i * 100) / len(img_as_array):.2f}% completed' )
+                        del temp
+                        
                 except MemoryError as error:
-                    slices = slices // 2
+                    slices =  round(slices/2)
                     print(f'Not enough RAM, new slices = {slices}')
 
                 else:

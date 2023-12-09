@@ -215,14 +215,14 @@ def main():
 
    
     target = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Initial_Inputs_Automated\Tiled_Inputs\stacked_bands_output_26.tif"
-    output = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Initial_Inputs_Automated\Tiled_Inputs\Modified"
+    output = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Initial_Inputs_Automated\Tiled_Inputs"
 
    
    
     #pad_rasters(source, target, output, pad_value=0)
-    print(print_res(output))
-    #call_trim(folder, output, target)
     
+    call_trim(folder, output, target)
+    print(print_res(output))
     
 if __name__ == "__main__":
     main()
