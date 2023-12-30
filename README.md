@@ -1,7 +1,10 @@
-# QGIS
-Initially a 300m x 300m grid shapefile is created within QGIS to match the extent of the orthomosaic, delineating the study area for subsequent analyses and a roughness raster is derived from the DEM using the GDAL roughness tool. 
+## RGB_Veg_Filter
+Random forest classification of bare earth and vegetation for raster files too large for memory. This workflow was made for drone based Structure from Motion (SfM) data and requires the following inputs: red, green, and blue bands as well as a roughness raster derived from the SfM DEM.  
 
 ![Workflow](Docs/Workflow.jpg)
+
+# QGIS
+Initially a 300m x 300m grid shapefile is created within QGIS to match the extent of the orthomosaic, delineating the study area for subsequent analyses and a roughness raster is derived from the DEM using the GDAL roughness tool. 
 
 # Python
 The Python GIStools.py script then extracts relevant features from these inputs for the random forest algorithm and tiles the raster inputs, which is necessary when working with very large raster datasets. The preprocess_function within this script executes multiple tasks including: extraction of RGB and roughness tiles, creation Excessive Green Index (EGI) and saturation rasters from RGB bands, alignment of all rasters to the smallest extent and highest resolution, and finally compilation of raster bands for Random Forest processing. In the final preprocessing step, the Raster_Matching.py script ensures the uniformity in raster dimensions necessary for random forest algorithm execution.  
