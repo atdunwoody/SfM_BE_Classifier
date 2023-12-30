@@ -17,8 +17,6 @@ import numpy as np
 import geopandas as gpd
 import matplotlib.pyplot as plt # plot figures
 
-import richdem as rd
-# Tell GDAL to throw Python exceptions, and register all drivers
 
 
 
@@ -427,7 +425,7 @@ def main():
     #ME valid ID values also include 2, 3, 15, 21, 38
     grid_id = [2, 3, 4, 7, 8, 9, 10, 13, 14, 15, 16, 17, 20, 21, 22, 23, 25, 26, 27, 28, 29, 31, 32, 33, 34, 35, 37, 38, 39, 43, 44]  # List of id values for masking
     #grid_id=[33, 34, 35, 37, 39, 43, 44]
-    preprocess_function(shapefile_path, ortho_path, roughness_path, grid_id, output_folder)
+    #preprocess_function(shapefile_path, ortho_path, roughness_path, grid_id, output_folder)
 
     
 if __name__ == '__main__':

@@ -1,6 +1,5 @@
 import subprocess
 #Setting GDAL_DATA environment variable, change the path to your own GDAL_DATA folder
-#Setting GDAL_DATA environment variable, change the path to your own GDAL_DATA folder
 import os
 gdal_data_path = r"C:\ProgramData\miniconda3\envs\DEMT\Library\share\gdal"
 os.environ['GDAL_DATA'] = gdal_data_path
