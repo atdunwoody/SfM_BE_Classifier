@@ -1,5 +1,5 @@
-## RGB_Veg_Filter
-Random forest classification of bare earth and vegetation for raster files too large for memory. This workflow was made for drone based Structure from Motion (SfM) data and requires the following inputs: red, green, and blue bands as well as a roughness raster derived from the SfM DEM.  
+## SfM_BE_Classifier
+Random forest classification of bare earth and vegetation for raster files too large for memory. This workflow was made for drone based Structure from Motion (SfM) data and requires the following inputs: red, green, and blue bands as well as a roughness raster derived from the SfM DEM. Currently, the workflow is semi-automated and requires a few pre-processing steps in QGIS. 
 
 ![Workflow](Docs/Workflow.jpg)
 
