@@ -70,7 +70,11 @@ def find_files(directory, file_name=None):
 
     return found_files, suffix_list           
 
-in_dir = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Results\ME_2023_Full_Run"
-inputs, suffix = find_files(in_dir)
-output = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Results\ME_2023_Full_Run\ME_2023__Stitched.tif"
-stitch_rasters(inputs, output)
+def main():
+    in_dir = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Initial_Inputs_Automated\Tiled_Inputs"
+    inputs, suffix = find_files(in_dir)
+    output = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Initial_Inputs_Automated\Tiled_Inputs\ME_Initial__Stitched.tif"
+    stitch_rasters(inputs, output)
+
+if __name__ == '__main__':
+    main()
