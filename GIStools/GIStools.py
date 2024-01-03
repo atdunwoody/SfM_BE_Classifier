@@ -7,6 +7,7 @@ gdal.UseExceptions()
 gdal.AllRegister()
 
 from pathlib import Path
+import shutil
 import rasterio
 from rasterio.mask import mask
 from rasterio.windows import from_bounds
@@ -337,7 +338,7 @@ def match_dem_resolution(source_dem_path, target_dem_path, output_path):
 
     print(f"Resampled DEM saved to: {output_path}")
 
-def preprocess_function(shapefile_path, ortho_filepath, roughness_filepath, grid_ids, output_folder):
+def preprocess_function(shapefile_path, ortho_filepath, DEM_filepath, grid_ids, output_folder):
     """
     Preprocess ortho and roughness data for specified grid cells for RF classification.
 
@@ -353,13 +354,21 @@ def preprocess_function(shapefile_path, ortho_filepath, roughness_filepath, grid
 
     outputs = {}
 
+    #Check if grid_id is empty, and if so, loop through all grid cells
+    if not grid_ids:
+        grid_ids = gpd.read_file(shapefile_path)['id'].tolist()
+    
     for grid_id in grid_ids:
         # Create a subfolder for each grid ID
         grid_output_folder = os.path.join(output_folder, f'Grid_{grid_id}')
         Path(grid_output_folder).mkdir(parents=True, exist_ok=True)
 
+        #Step 2: Create roughness raster
+        roughness_path = os.path.join(grid_output_folder, 'roughness.tif')
+        calculate_roughness(DEM_filepath, roughness_path)
+        
         # Step 3: Mask ortho and roughness rasters by shapefile
-        masked_rasters = mask_rasters_by_shapefile([ortho_filepath, roughness_filepath], shapefile_path, grid_output_folder, [grid_id])
+        masked_rasters = mask_rasters_by_shapefile([ortho_filepath, roughness_path], shapefile_path, grid_output_folder, [grid_id])
         masked_ortho = masked_rasters[grid_id][0]  # Assuming ortho raster is first in the list
 
         # Step 4: Split bands of the ortho raster
@@ -394,6 +403,9 @@ def preprocess_function(shapefile_path, ortho_filepath, roughness_filepath, grid
         processed_rgb = None
         rgb_bands = None
         rasters_to_stack = None
+
+        # Delete the working folder for the cureent grid ID
+        shutil.rmtree(grid_output_folder)
     return outputs
 
 
@@ -402,12 +414,10 @@ def main():
     grid_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test\grid.shp"
     ortho_path = r"Z:\ATD\Drone Data Processing\Metashape Exports\Bennett\ME\11-4-23\GIS\ME_Ortho_1.77cm.tif"
     DEM_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test\ME_DEM_Initial_Clipped.tif"
-    roughness_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test\ME_Roughness_Test-Val.tif"
     output_folder = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test"
-    grid_ids = [1]  # List of id values for masking
+    grid_ids = []  # Choose grid IDs to process, or leave empty to process all grid cells
     
-    calculate_roughness(DEM_path, roughness_path)
-    preprocess_function(grid_path, ortho_path, roughness_path, grid_ids, output_folder)
+    preprocess_function(grid_path, ortho_path, DEM_path, grid_ids, output_folder)
 
     
 if __name__ == '__main__':
