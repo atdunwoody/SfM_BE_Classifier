@@ -15,11 +15,7 @@ import geopandas as gpd
 import numpy as np
 
 import geopandas as gpd
-import matplotlib.pyplot as plt # plot figures
-
-
-
-
+from DEM_to_Roughness import calculate_roughness
 
 
 def clip_rasters_by_extent(target_raster_paths, template_raster_path):
@@ -70,7 +66,8 @@ def clip_rasters_by_extent(target_raster_paths, template_raster_path):
 
 def mask_rasters_by_shapefile(raster_paths, shapefile_path, output_folder, id_values, id_field='id', stack = False):
     """
-    Mask a list of rasters by different polygons specified by id_values from a single shapefile.
+    Mask a list of rasters by different polygons specified by id_values from a single shapefile. 
+    Entire bounds of shapefile will not be used, only the portions of the raster within bounds of the polygons with the specified id_values will be retained.
 
     Parameters:
     raster_paths (list of str): List of file paths to the raster files.
@@ -300,7 +297,6 @@ def processRGB(RGB_Path):
     print("EGI and Saturation rasters created.")
     return [Sat_output, EGI_output]
 
-
 def match_dem_resolution(source_dem_path, target_dem_path, output_path):
     """
     Match the resolution of one DEM to another DEM.
@@ -340,8 +336,6 @@ def match_dem_resolution(source_dem_path, target_dem_path, output_path):
     out_ds = None  # Close and save the file
 
     print(f"Resampled DEM saved to: {output_path}")
-
-
 
 def preprocess_function(shapefile_path, ortho_filepath, roughness_filepath, grid_ids, output_folder):
     """
@@ -404,28 +398,16 @@ def preprocess_function(shapefile_path, ortho_filepath, roughness_filepath, grid
 
 
 def main():
-    RGB_path = [r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 9 Large\Inputs\R.tif",
-                r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 9 Large\Inputs\G.tif",
-                r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 9 Large\Inputs\B.tif"]
-    #preprocessed_list = processRGB(RGB_path)
-   
-
-    raster_paths =[r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Results\Results_LDA\ME_classified_masked.tif",
-                    r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Inputs_Automated\Grid_38\Saturation.tif",
-                    r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Inputs_Automated\Grid_38\Roughness_Filtered_masked_38_clipped.tif",
-                    r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Inputs_Automated\Grid_38\orthoband_3.tif",
-                    r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Inputs_Automated\Grid_38\orthoband_2.tif",
-                    r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Inputs_Automated\Grid_38\orthoband_1.tif",
-                    r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Inputs_Automated\Grid_38\EGI.tif"]
     
-    shapefile_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 11 Grid\grid_300x300m.shp"
+    grid_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test\grid.shp"
     ortho_path = r"Z:\ATD\Drone Data Processing\Metashape Exports\Bennett\ME\11-4-23\GIS\ME_Ortho_1.77cm.tif"
-    roughness_path = r"Z:\ATD\Drone Data Processing\Metashape Exports\Bennett\ME\11-4-23\GIS\ME_Initial_Roughness-Filt.tif"
-    output_folder = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Initial_Inputs_Automated"
-    #ME valid ID values also include 2, 3, 15, 21, 38
-    grid_id = [2, 3, 4, 7, 8, 9, 10, 13, 14, 15, 16, 17, 20, 21, 22, 23, 25, 26, 27, 28, 29, 31, 32, 33, 34, 35, 37, 38, 39, 43, 44]  # List of id values for masking
-    #grid_id=[33, 34, 35, 37, 39, 43, 44]
-    #preprocess_function(shapefile_path, ortho_path, roughness_path, grid_id, output_folder)
+    DEM_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test\ME_DEM_Initial_Clipped.tif"
+    roughness_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test\ME_Roughness_Test-Val.tif"
+    output_folder = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test"
+    grid_ids = [1]  # List of id values for masking
+    
+    calculate_roughness(DEM_path, roughness_path)
+    preprocess_function(grid_path, ortho_path, roughness_path, grid_ids, output_folder)
 
     
 if __name__ == '__main__':
