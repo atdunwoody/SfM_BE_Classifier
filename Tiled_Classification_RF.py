@@ -17,38 +17,35 @@ gdal.AllRegister()
 from GIStools.GIStools import preprocess_function 
 from GIStools.Raster_Sieve import raster_sieve
 from GIStools.Stitch_Rasters import stitch_rasters
-
+from GIStools.
 
 # In[1]: #-------------------User Defined Inputs-------------------#
 #Path to grid shapefile created in QGIS. Grid cell size will depend on processing capabilities of computer and extent of training & validation shapefiles
 #Training & Validation shapefiles should fit entirely within a single grid cell
-grid_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test\grid.shp"
+grid_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test\Grid_Creation_Test\grid.shp"
 
 #Path to orthomosaic and DEM created in Metashape
 ortho_path = r"Z:\ATD\Drone Data Processing\Metashape Exports\Bennett\ME\11-4-23\GIS\ME_Ortho_1.77cm.tif"
-DEM_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test\ME_DEM_Initial_Clipped.tif"
+DEM_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test\Grid_Creation_Test\Full_DEM_Clipped.tif"
 
 #Output folder for all generated Inputs and Results
 output_folder = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test"
-grid_ids = [1]  # Choose grid IDs to process, or leave empty to process all grid cells
-train_val_grid_id = '1'  # Identify single grid ID that contains training and validation data
+grid_ids = []  # Choose grid IDs to process, or leave empty to process all grid cells
+train_val_grid_id = '23'  # Identify single grid ID that contains training and validation data
 
-
-
-# Paths to training and validation as shape files
-training = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Training\Training.shp"
-validation = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Validation\Validation.shp"
-attribute = 'id' # attribute name in training & validation shapefiles that labels bare earth & vegetation (field name of the classes)?
+# Paths to training and validation as shape files. Training and validation shapefiles should be clipped to a single grid cell
+# Training and Validation shapefiles should be labeled with a single, NON ZERO  attribute that identifies bare earth and vegetation.
+training = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Training-Validation Shapes\Archive\Training\Training.shp"  # 0 = No Data
+validation = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Training-Validation Shapes\Archive\Validation\Validation.shp"  # 0 = No Data
+attribute = 'id' # attribute name in training & validation shapefiles that labels bare earth & vegetation 
 est = 300 # define number of trees that will be used to build random forest (default = 300)
 n_cores = -1 # -1 -> all available computing cores will be used (default = -1)
-
-process_multiple = True # Set to True to process multiple images
-validate = True # Set to True to validate the classification results
 
 #Sieveing parameters: Removing small areas of potential misclassified pixels
 sieve_size = 36 # Size of sieve kernel will depend on cell size, (default = 36 set for 1.77cm cell size)
 eight_connected = True # Set to True to remove 8-connected pixels, set to False to remove 4-connected pixels (default = True)
 
+stitch = True # Set to True to stitch all classified tiles into a single image, set to False to keep classified tiles in separate rasters (default = True)
 
 # In[2]: #--------------------Preprocessing-----------------------------#
 #Prepare input stacked rasters for random forest classification
@@ -100,10 +97,10 @@ def find_files(directory, file_name=None):
 img_path_list, id_values = find_files(in_dir)
 
 #output folder for list of img_path_list grid-clipped classified images
-classification_image = os.path.join(output_folder, 'ME_Classified_Training_classified.tif')
+classification_image = os.path.join(output_folder, 'Classified_Training_Image.tif')
 
 # directory, where the all meta results should be saved:
-results_txt = os.path.join(output_folder, 'ME_Initial_results.txt')
+results_txt = os.path.join(output_folder, 'Results_Summary.txt')
 
 
 # In[3]: #-------------------SHAPEFILE DATA EXTRACTION-------------------#
@@ -329,7 +326,7 @@ outdata.FlushCache() ##saves to disk
 print('Image saved to: {}'.format(classification_image))
 
 
-# In[12]: #-------------------VALIDATION-------------------#
+# In[12]: #-------------------VALIDATION AND EVALUATION-------------------#
 print('------------------------------------', file=open(results_txt, "a"))
 print('VALIDATION', file=open(results_txt, "a"))
 
@@ -405,7 +402,7 @@ plt.ylabel('classes - truth')
 
 del img_ds # close the image dataset
 
-# In[12]:#-------------------PREDICTION ON MULTIPLE TILES-------------------#
+# In[13]:#-------------------PREDICTION ON MULTIPLE TILES-------------------#
 #Check if there are multiple tiles to process
 if grid_ids:
     for index, (img_path, id_value) in enumerate(zip(img_path_list, id_values), start=1):
@@ -490,6 +487,7 @@ print('Processing End: {}'.format(datetime.datetime.now()), file=open(results_tx
 
 # In[13]: #------------------POST PROCESSING------------------#
 
-
-#stitch_rasters(output_folder, os.path.join(output_folder, 'ME_classified_masked.tif'))
+if stitch:
+    print('Stitching rasters')
+    stitch_rasters(output_folder, os.path.join(output_folder, 'Stitched_Classified_Image.tif'))
 
