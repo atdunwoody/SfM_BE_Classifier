@@ -203,12 +203,12 @@ def stack_bands(input_raster_list, output_path=None, suffix = None):
     if not output_path:
         # Determine the base directory from the first input raster
         base_dir = Path(input_raster_list[0]).parent
-        output_file = base_dir / "stacked_bands_output.tif"
+        output_file = base_dir / "stacked_bands_tile_input.tif"
     else:
         #create output folder if it does not exist
         Path(output_path).mkdir(parents=True, exist_ok=True)
         #Add suffix to output file name
-        output_file = Path(output_path) / f"stacked_bands_output_{suffix}.tif"
+        output_file = Path(output_path) / f"stacked_bands_tile_input_{suffix}.tif"
     # Open the first file to get the projection and geotransform
     src_ds = gdal.Open(input_raster_list[0])
     geotransform = src_ds.GetGeoTransform()
@@ -420,7 +420,7 @@ def preprocess_function(shapefile_path, ortho_filepath, DEM_filepath, grid_ids, 
 
         # Delete the working folder for the cureent grid ID
         shutil.rmtree(grid_output_folder)
-    return outputs
+    return grid_ids
 
 
 def main():

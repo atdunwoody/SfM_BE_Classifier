@@ -6,7 +6,73 @@ from osgeo import ogr
 ogr.UseExceptions()
 import math
 
-def create_grid(cell_bounds, bounding_raster, output_folder):
+def create_grid(shapefile_paths, bounding_raster, output_folder):
+    
+    def find_grid_id(cell_bounds, grid_shapefile):
+        """
+        Returns the grid ID of the grid cell that contains the given cell bounds.
+
+        :param cell_bounds: A tuple of (minx, miny, maxx, maxy) representing the bounds.
+        :param grid_shapefile: Path to the grid shapefile containing grid cells with 'id' fields.
+        :return: The ID of the grid cell that contains the cell bounds or None if not found.
+        """
+
+        # Load the grid shapefile into a GeoDataFrame
+        grid = gpd.read_file(grid_shapefile)
+
+        # Create a bounding box from the cell_bounds
+        bounding_box = box(*cell_bounds)
+
+        # Find the grid cell that contains the bounding box
+        grid_cell = grid[grid.intersects(bounding_box)]
+        
+        # If a grid cell was found, return its ID
+        if len(grid_cell) > 0:
+            return grid_cell.iloc[0]['id']
+    
+    def get_combined_extent(shapefile_paths):
+        """
+        Returns the maximum bounding box around the given list of shapefiles.
+        
+        :param shapefile_paths: A list of paths to the shapefiles.
+        :return: A tuple representing the combined extent (min_x, min_y, max_x, max_y) of the shapefiles.
+        """
+        def get_layer_extent(vector_path):
+            """Returns the extent of the given vector layer."""
+            dataset = ogr.Open(vector_path)
+            if not dataset:
+                print(f"Failed to open the file at {vector_path}")
+                return None
+
+            layer = dataset.GetLayer()
+            extent = layer.GetExtent()
+
+            # Clean up
+            layer = None
+            dataset = None
+
+            return extent
+
+        def combine_extents(extent1, extent2):
+            """Combines two extents to find the outermost bounds."""
+            min_x = min(extent1[0], extent2[0])
+            max_x = max(extent1[1], extent2[1])
+            min_y = min(extent1[2], extent2[2])
+            max_y = max(extent1[3], extent2[3])
+            return (min_x, min_y, max_x, max_y)
+
+        combined_extent = None
+        for vector_path in shapefile_paths:
+            current_extent = get_layer_extent(vector_path)
+            if current_extent:
+                if combined_extent:
+                    combined_extent = combine_extents(combined_extent, current_extent)
+                else:
+                    combined_extent = current_extent
+        return combined_extent
+    
+    
+    cell_bounds = get_combined_extent(shapefile_paths)
     # Load the raster
     with rasterio.open(bounding_raster) as src:
         raster_bounds = src.bounds
@@ -54,60 +120,20 @@ def create_grid(cell_bounds, bounding_raster, output_folder):
         os.makedirs(output_folder)
 
     # Define the output path
-    output_path = os.path.join(output_folder, 'grid.shp')
+    #Create output folder if it doesn't exist
+    if not os.path.exists(os.path.join(output_folder, 'Grid')):
+        os.makedirs(os.path.join(output_folder, 'Grid'))
+    
+    output_path = os.path.join(output_folder, 'Grid', 'grid.shp')
     
     # Save the grid to a shapefile
     grid.to_file(output_path)
     
-    return grid, output_path
+    grid_id = find_grid_id(cell_bounds, output_path)
+    
+    return grid_id, output_path
 
-def find_grid_id(cell_bounds, grid_shapefile):
-    """
-    Returns the grid ID of the grid cell that contains the given cell bounds.
 
-    :param cell_bounds: A tuple of (minx, miny, maxx, maxy) representing the bounds.
-    :param grid_shapefile: Path to the grid shapefile containing grid cells with 'id' fields.
-    :return: The ID of the grid cell that contains the cell bounds or None if not found.
-    """
-
-    # Load the grid shapefile into a GeoDataFrame
-    grid = gpd.read_file(grid_shapefile)
-
-    # Create a bounding box from the cell_bounds
-    bounding_box = box(*cell_bounds)
-
-    # Find the grid cell that contains the bounding box
-    grid_cell = grid[grid.intersects(bounding_box)]
-    
-    # If a grid cell was found, return its ID
-    if len(grid_cell) > 0:
-        return grid_cell.iloc[0]['id']
-    
-def get_layer_extent(vector_path):
-    """Returns the extent of the given vector layer."""
-    dataset = ogr.Open(vector_path)
-    if not dataset:
-        print(f"Failed to open the file at {vector_path}")
-        return None
-    
-    layer = dataset.GetLayer()
-    extent = layer.GetExtent()
-    
-    # Clean up
-    layer = None
-    dataset = None
-    
-    return extent
-
-def combine_extents(extent1, extent2):
-    """Combines two extents to find the outermost bounds."""
-    min_x = min(extent1[0], extent2[0])
-    max_y = max(extent1[3], extent2[3])
-    max_x = max(extent1[1], extent2[1])
-    min_y = min(extent1[2], extent2[2])
-    
-    
-    return (min_x, min_y, max_x, max_y)
 
 def main():
     # Example usage:
@@ -122,8 +148,8 @@ def main():
     bounds = combine_extents(get_layer_extent(first_vector_path), get_layer_extent(second_vector_path))
 
 
-    #create_grid(bounds, template_raster_path, output_path)
-    find_grid_id(bounds, r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test\Grid_Creation_Test\grid.shp"))
+    create_grid(bounds, template_raster_path, output_path)
+    find_grid_id(bounds, r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test\Grid_Creation_Test\grid.shp")
 
 
 if __name__ == '__main__':
