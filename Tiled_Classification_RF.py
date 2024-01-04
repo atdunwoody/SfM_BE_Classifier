@@ -15,10 +15,62 @@ import datetime
 gdal.UseExceptions()
 gdal.AllRegister()
 from GIStools.GIStools import preprocess_function 
+from GIStools.Raster_Seive import raster_sieve
+from GIStools.Stitch_Rasters import stitch_rasters
+
+
+# In[1]: #-------------------User Defined Inputs-------------------#
+#Path to grid shapefile created in QGIS. Grid cell size will depend on processing capabilities of computer and extent of training & validation shapefiles
+#Training & Validation shapefiles should fit entirely within a single grid cell
+grid_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test\grid.shp"
+
+#Path to orthomosaic and DEM created in Metashape
+ortho_path = r"Z:\ATD\Drone Data Processing\Metashape Exports\Bennett\ME\11-4-23\GIS\ME_Ortho_1.77cm.tif"
+DEM_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test\ME_DEM_Initial_Clipped.tif"
+
+#Output folder for all generated Inputs and Results
+output_folder = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test"
+grid_ids = [1]  # Choose grid IDs to process, or leave empty to process all grid cells
+train_val_grid_id = '1'  # Identify single grid ID that contains training and validation data
 
 
 
-# In[1]:
+# Paths to training and validation as shape files
+training = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Training\Training.shp"
+validation = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Validation\Validation.shp"
+attribute = 'id' # attribute name in training & validation shapefiles that labels bare earth & vegetation (field name of the classes)?
+est = 300 # define number of trees that will be used to build random forest (default = 300)
+n_cores = -1 # -1 -> all available computing cores will be used (default = -1)
+
+process_multiple = True # Set to True to process multiple images
+validate = True # Set to True to validate the classification results
+
+#Sieveing parameters: Removing small areas of potential misclassified pixels
+sieve_size = 36 # Size of sieve kernel will depend on cell size, (default = 36 set for 1.77cm cell size)
+eight_connected = True # Set to True to remove 8-connected pixels, set to False to remove 4-connected pixels (default = True)
+
+
+# In[2]: #--------------------Preprocessing-----------------------------#
+#Prepare input stacked rasters for random forest classification
+preprocess_function(grid_path, ortho_path, DEM_path, grid_ids, output_folder)
+
+# Check if train_val_grid_id is in grid_ids and remove it from grid_ids
+if train_val_grid_id in grid_ids:
+    grid_ids.remove(train_val_grid_id)
+    
+#List of grid-clipped images to classify and associated id values
+print(output_folder)
+in_dir = os.path.join(output_folder, 'Tiled_Inputs', 'stacked_bands_output')
+print(in_dir)
+# grid-clipped-image containing the training data
+img_RS = os.path.join(output_folder, 'Tiled_Inputs', f'stacked_bands_output_{train_val_grid_id}.tif')
+print('Training Image: {}'.format(img_RS))
+
+# directory, where the classification image should be saved:
+output_folder = os.path.join(output_folder, 'Results')
+if not os.path.exists(output_folder):
+    os.makedirs(output_folder)
+    
     
 def find_files(directory, file_name=None):
     found_files = []
@@ -44,56 +96,17 @@ def find_files(directory, file_name=None):
                     found_files.append(full_path)
 
     return found_files, suffix_list
-# define a number of trees that should be used (default = 300)
-est = 300
 
-# how many cores should be used?
-# -1 -> all available cores
-n_cores = -1
-
-grid_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test\grid.shp"
-ortho_path = r"Z:\ATD\Drone Data Processing\Metashape Exports\Bennett\ME\11-4-23\GIS\ME_Ortho_1.77cm.tif"
-DEM_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test\ME_DEM_Initial_Clipped.tif"
-output_folder = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test"
-grid_ids = []  # Choose grid IDs to process, or leave empty to process all grid cells
-
-preprocess_function(grid_path, ortho_path, DEM_path, grid_ids, output_folder)
-"""
-# grid-clipped-image containing the training data
-img_RS = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Spring_2023_Inputs_Automated\Tiled_Inputs_v2\Tile_38.tif"
-print('Training Image: {}'.format(img_RS))
-# training and validation as shape files
-training = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Training.shp"
-validation = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Results\Results_expanded_shapes - v2\Training-Validation Shapes\Validation.shp"
-
-# what is the attributes name of your classes in the shape file (field name of the classes)?
-attribute = 'id'
-
-#List of grid-clipped images to classify and associated id values
-in_dir = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Initial_Inputs_Automated\Tiled_Inputs"
 img_path_list, id_values = find_files(in_dir)
 
-#img_path_list = [r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Inputs_Automated\Grid_15\stacked_bands_output.tif"]  # Replace with actual paths
-
-
-# directory, where the classification image should be saved:
-output_folder = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Results\ME_Initial_Full_Run"
-if not os.path.exists(output_folder):
-    os.makedirs(output_folder)
-    
 #output folder for list of img_path_list grid-clipped classified images
-classification_image = os.path.join(output_folder, 'ME_Initial_Training_classified.tif')
+classification_image = os.path.join(output_folder, 'ME_Classified_Training_classified.tif')
 
 # directory, where the all meta results should be saved:
 results_txt = os.path.join(output_folder, 'ME_Initial_results.txt')
 
-process_multiple = True
-validate = False
 
-# In[2]:
-
-
-#-------------------SHAPEFILE DATA EXTRACTION-------------------#
+# In[3]: #-------------------SHAPEFILE DATA EXTRACTION-------------------#
 
 #model_dataset = gdal.Open(model_raster_fname)
 shape_dataset = ogr.Open(training)
@@ -110,10 +123,7 @@ for n in range(ldefn.GetFieldCount()):
 print('Available attributes in the shape file are: {}'.format(attributes))
 
 
-
-
-# In[5]:
-#-------------------PREPARING RESULTS TEXT FILE-------------------#
+# In[4]: #-------------------PREPARING RESULTS TEXT FILE-------------------#
 #Overwrite if there is an existing file
 if os.path.exists(results_txt):
     os.remove(results_txt)
@@ -130,8 +140,7 @@ print('Report text file: {}'.format(results_txt) , file=open(results_txt, "a"))
 print('-------------------------------------------------', file=open(results_txt, "a"))
 
 
-# In[6]:
-#-------------------IMAGE DATA EXTRACTION-------------------#
+# In[5]: #-------------------IMAGE DATA EXTRACTION-------------------#
 
 print('Extracting image data from: {}'.format(img_RS))
 img_ds = gdal.Open(img_RS, gdal.GA_ReadOnly)
@@ -142,7 +151,6 @@ for b in range(img.shape[2]):
     img[:, :, b] = img_ds.GetRasterBand(b + 1).ReadAsArray()
 
 
-# In[7]:
 row = img_ds.RasterYSize
 col = img_ds.RasterXSize
 band_number = img_ds.RasterCount
@@ -158,9 +166,7 @@ print('TRAINING', file=open(results_txt, "a"))
 print('Number of Trees: {}'.format(est), file=open(results_txt, "a"))
 
 
-# In[8]:
-
-#-------------------TRAINING DATA EXTRACTION FROM SHAPEFILE-------------------#
+# In[7]: #-------------------TRAINING DATA EXTRACTION FROM SHAPEFILE-------------------#
 
 #model_dataset = gdal.Open(model_raster_fname)
 shape_dataset = ogr.Open(training)
@@ -180,10 +186,6 @@ assert err == gdal.CE_None
 
 roi = mem_raster.ReadAsArray()
 
-
-# In[9]:
-
-#-------------------TRAINING DATA EXTRACTION FROM SHAPEFILE-------------------#
 # Find how many non-zero entries we have -- i.e. how many training data samples?
 # Number of training pixels:
 n_samples = (roi > 0).sum()
@@ -205,9 +207,9 @@ print('Our X matrix is sized: {sz}'.format(sz=X.shape))
 print('Our y array is sized: {sz}'.format(sz=y.shape))
 
 
-#--------------------Train Random Forest-----------------#
 
-# In[10]:
+
+# In[9]: #--------------------Train Random Forest-----------------#
 
 rf = RandomForestClassifier(n_estimators=est, oob_score=True, verbose=0, n_jobs=n_cores)
 
@@ -216,28 +218,23 @@ rf = RandomForestClassifier(n_estimators=est, oob_score=True, verbose=0, n_jobs=
 X = np.nan_to_num(X)
 rf2 = rf.fit(X, y)
 
-# ### Section - RF Model Diagnostics
 
-# In[11]:
-# With our Random Forest model fit, we can check out the "Out-of-Bag" (OOB) prediction score:
+
+# In[10]: # -------------------RF MODEL DIAGNOSTICS-------------------#
 
 print('--------------------------------', file=open(results_txt, "a"))
 print('TRAINING and RF Model Diagnostics:', file=open(results_txt, "a"))
 print('OOB prediction of accuracy is: {oob}%'.format(oob=rf.oob_score_ * 100))
 print('OOB prediction of accuracy is: {oob}%'.format(oob=rf.oob_score_ * 100), file=open(results_txt, "a"))
 
-
-# we can show the band importance:
+# Show band importance:
 bands = range(1,img_ds.RasterCount+1)
 
 for b, imp in zip(bands, rf2.feature_importances_):
     print('Band {b} importance: {imp}'.format(b=b, imp=imp))
     print('Band {b} importance: {imp}'.format(b=b, imp=imp), file=open(results_txt, "a"))
 
-    
 # Set up confusion matrix for cross-tabulation
-
-
 try:
     df = pd.DataFrame()
     df['truth'] = y
@@ -253,165 +250,164 @@ else:
     print(pd.crosstab(df['truth'], df['predict'], margins=True), file=open(results_txt, "a"))
 
 
-# In[12]:
+
 cm = confusion_matrix(y,rf.predict(X))
 plt.figure(figsize=(10,7))
 sn.heatmap(cm, annot=True, fmt='g')
 plt.xlabel('classes - predicted')
 plt.ylabel('classes - truth')
+# In[11]:#-------------------PREDICTION ON TRAINING IMAGE-------------------#
 
-if validate:
-    #-------------------PREDICTION ON TRAINING IMAGE-------------------#
-    new_shape = (img.shape[0] * img.shape[1], img.shape[2])
-    img_as_array = img[:, :, :int(img.shape[2])].reshape(new_shape)
+# Flatten multiple raster bands (3D array) into 2D array for classification
+new_shape = (img.shape[0] * img.shape[1], img.shape[2]) # New shape is a length of rows x number of bands
+img_as_array = img[:, :, :int(img.shape[2])].reshape(new_shape)  # reshape the image array to [n_samples, n_features]
 
-    print('Reshaped from {o} to {n}'.format(o=img.shape, n=img_as_array.shape))
+print('Reshaped from {o} to {n}'.format(o=img.shape, n=img_as_array.shape))
 
-    img_as_array = np.nan_to_num(img_as_array)
+img_as_array = np.nan_to_num(img_as_array) # Convert NaNs to 0.0
 
-    # Now predict for each pixel on training tile
-    # first prediction will be tried on the entire image
-    # if not enough RAM, the dataset will be sliced
-    try:
-        class_prediction = rf.predict(img_as_array)
-    except MemoryError:
-        slices = int(round((len(img_as_array)/2)))
-        print("Slices: ", slices)
-        test = True
-        
-        while test == True:
-            try:
-                class_preds = list()
-                
-                temp = rf.predict(img_as_array[0:slices+1,:])
+# Predict for each pixel on training tile. First prediction will be tried on the entire image and the dataset will be sliced if there is not enough RAM
+try:
+    class_prediction = rf.predict(img_as_array) # Predict the classification for each pixel using the trained model
+# Check if there is enough RAM to process the entire image, if not, slice the image into smaller pieces and process each piece
+except MemoryError:
+    slices = int(round((len(img_as_array)/2)))
+    print("Slices: ", slices)
+    test = True
+    
+    while test == True:
+        try:
+            class_preds = list()
+            
+            temp = rf.predict(img_as_array[0:slices+1,:])
+            class_preds.append(temp)
+            
+            for i in range(slices,len(img_as_array),slices):
+                if (i // slices) % 10 == 0:
+                    print(f'{(i * 100) / len(img_as_array):.2f}% completed, Processing slice {i}')
+                temp = rf.predict(img_as_array[i+1:i+(slices+1),:])                
                 class_preds.append(temp)
-                
-                for i in range(slices,len(img_as_array),slices):
-                    if (i // slices) % 10 == 0:
-                        print(f'{(i * 100) / len(img_as_array):.2f}% completed, Processing slice {i}')
-                    temp = rf.predict(img_as_array[i+1:i+(slices+1),:])                
-                    class_preds.append(temp)
-                
-            except MemoryError as error:
-                slices = round(slices/2)
-                print('Not enought RAM, new slices = {}'.format(slices))
-                
-            else:
-                test = False
-                
-    #Concatenate the list of sliced  arrays into a single array
-    try:
-        class_prediction = np.concatenate(class_preds,axis = 0)
-    except NameError:
-        print('No slicing was necessary!')
+            
+        except MemoryError as error:
+            slices = round(slices/2)
+            print('Not enought RAM, new slices = {}'.format(slices))
+            
+        else:
+            test = False
+            
+#Concatenate the list of sliced arrays into a single array
+try:
+    class_prediction = np.concatenate(class_preds,axis = 0)
+except NameError:
+    print('No slicing was necessary!')
 
-    # Reshape our classification map back into a 2D matrix so we can visualize it`` 
-    class_prediction = class_prediction.reshape(img[:, :, 0].shape)
-    print('Reshaped back to {}'.format(class_prediction.shape))
+# Reshape our classification map back into a 2D matrix so we can visualize it`` 
+class_prediction = class_prediction.reshape(img[:, :, 0].shape)
+print('Reshaped back to {}'.format(class_prediction.shape))
 
 
-    #-------------------MASKING-------------------#
-    mask = np.copy(img[:,:,0])
-    mask[mask > 0.0] = 1.0 # all actual pixels have a value of 1.0
+#-------------------MASKING-------------------#
+mask = np.copy(img[:,:,0])
+mask[mask > 0.0] = 1.0 # all actual pixels have a value of 1.0
 
-    # Apply mask
-    class_prediction.astype(np.float16)
-    class_prediction_ = class_prediction*mask
-
-
-    #--------------SAVE CLASSIFICATION IMAGE-----------------#
-    cols = img.shape[1]
-    rows = img.shape[0]
-
-    class_prediction_.astype(np.float16)
-    driver = gdal.GetDriverByName("gtiff")
-    outdata = driver.Create(classification_image, cols, rows, 1, gdal.GDT_UInt16)
-    outdata.SetGeoTransform(img_ds.GetGeoTransform())##sets same geotransform as input
-    outdata.SetProjection(img_ds.GetProjection())##sets same projection as input
-    outdata.GetRasterBand(1).WriteArray(class_prediction_)
-    outdata.FlushCache() ##saves to disk!!
-    print('Image saved to: {}'.format(classification_image))
-    #-------------------VALIDATION-------------------#
-    print('------------------------------------', file=open(results_txt, "a"))
-    print('VALIDATION', file=open(results_txt, "a"))
-
-    # laod training data from shape file
-    shape_dataset_v = ogr.Open(validation)
-    shape_layer_v = shape_dataset_v.GetLayer()
-    mem_drv_v = gdal.GetDriverByName('MEM')
-    mem_raster_v = mem_drv_v.Create('',img_ds.RasterXSize,img_ds.RasterYSize,1,gdal.GDT_UInt16)
-    mem_raster_v.SetProjection(img_ds.GetProjection())
-    mem_raster_v.SetGeoTransform(img_ds.GetGeoTransform())
-    mem_band_v = mem_raster_v.GetRasterBand(1)
-    mem_band_v.Fill(0)
-    mem_band_v.SetNoDataValue(0)
-
-    # http://gdal.org/gdal__alg_8h.html#adfe5e5d287d6c184aab03acbfa567cb1
-    # http://gis.stackexchange.com/questions/31568/gdal-rasterizelayer-doesnt-burn-all-polygons-to-raster
-    err_v = gdal.RasterizeLayer(mem_raster_v, [1], shape_layer_v, None, None, [1],  [att_,"ALL_TOUCHED=TRUE"])
-    assert err_v == gdal.CE_None
-
-    roi_v = mem_raster_v.ReadAsArray()
+# Apply mask
+class_prediction.astype(np.float16)
+class_prediction_ = class_prediction*mask
 
 
+#--------------SAVE CLASSIFICATION IMAGE-----------------#
+cols = img.shape[1]
+rows = img.shape[0]
 
-    # Find how many non-zero entries we have -- i.e. how many validation data samples?
-    n_val = (roi_v > 0).sum()
-    print('{n} validation pixels'.format(n=n_val))
-    print('{n} validation pixels'.format(n=n_val), file=open(results_txt, "a"))
-
-    # What are our validation labels?
-    labels_v = np.unique(roi_v[roi_v > 0])
-    print('validation data include {n} classes: {classes}'.format(n=labels_v.size, classes=labels_v))
-    print('validation data include {n} classes: {classes}'.format(n=labels_v.size, classes=labels_v), file=open(results_txt, "a"))
-    # Subset the classification image with the validation image = X
-    # Mask the classes on the validation dataset = y
-    # These will have n_samples rows
-    X_v = class_prediction[roi_v > 0]
-    y_v = roi_v[roi_v > 0]
-
-    print('Our X matrix is sized: {sz_v}'.format(sz_v=X_v.shape))
-    print('Our y array is sized: {sz_v}'.format(sz_v=y_v.shape))
-
-    # Cross-tabulate predictions
-    # confusion matrix
-    convolution_mat = pd.crosstab(y_v, X_v, margins=True)
-    print(convolution_mat)
-    print(convolution_mat, file=open(results_txt, "a"))
-    # if you want to save the confusion matrix as a CSV file:
-    #savename = 'C:\\save\\to\\folder\\conf_matrix_' + str(est) + '.csv'
-    #convolution_mat.to_csv(savename, sep=';', decimal = '.')
-
-    # information about precision, recall, f1_score, and support:
-    # http://scikit-learn.org/stable/modules/generated/sklearn.metrics.precision_recall_fscore_support.html
-    #sklearn.metrics.precision_recall_fscore_support
-    target_names = list()
-    for name in range(1,(labels.size)+1):
-        target_names.append(str(name))
-    sum_mat = classification_report(y_v,X_v,target_names=target_names)
-    print(sum_mat)
-    print(sum_mat, file=open(results_txt, "a"))
-
-    # Overall Accuracy (OAA)
-    print('OAA = {} %'.format(accuracy_score(y_v,X_v)*100))
-    print('OAA = {} %'.format(accuracy_score(y_v,X_v)*100), file=open(results_txt, "a"))
+class_prediction_.astype(np.float16)
+driver = gdal.GetDriverByName("gtiff")
+outdata = driver.Create(classification_image, cols, rows, 1, gdal.GDT_UInt16) # Create empty image with input raster dimensions
+outdata.SetGeoTransform(img_ds.GetGeoTransform())##sets same geotransform as input
+outdata.SetProjection(img_ds.GetProjection())##sets same projection as input
+outdata.GetRasterBand(1).WriteArray(class_prediction_)
+outdata.FlushCache() ##saves to disk
+print('Image saved to: {}'.format(classification_image))
 
 
-    # In[20]:
+# In[12]: #-------------------VALIDATION-------------------#
+print('------------------------------------', file=open(results_txt, "a"))
+print('VALIDATION', file=open(results_txt, "a"))
+
+# laod training data from shape file
+shape_dataset_v = ogr.Open(validation) # open shape file
+shape_layer_v = shape_dataset_v.GetLayer() # get layer of shape file
+mem_drv_v = gdal.GetDriverByName('MEM')  # create memory layer 
+mem_raster_v = mem_drv_v.Create('',img_ds.RasterXSize,img_ds.RasterYSize,1,gdal.GDT_UInt16) # create memory raster
+mem_raster_v.SetProjection(img_ds.GetProjection()) # set projection to match original image
+mem_raster_v.SetGeoTransform(img_ds.GetGeoTransform()) # set geotransform to match original image
+mem_band_v = mem_raster_v.GetRasterBand(1)
+# fill with zeros so that pixels not covered by polygons are set to 0
+mem_band_v.Fill(0) # fill with zeros
+mem_band_v.SetNoDataValue(0) # set no data value to 0
 
 
-    cm_val = confusion_matrix(roi_v[roi_v > 0],class_prediction[roi_v > 0])
-    plt.figure(figsize=(10,7))
-    sn.heatmap(cm_val, annot=True, fmt='g')
-    plt.xlabel('classes - predicted')
-    plt.ylabel('classes - truth')
-    
-    del img_ds
+# Rasterize the validation shapefile layer to create a raster layer, mem_raster_v, where pixel values are equal to attribute value of polygons (nodata is 0)
+# "ALL_TOUCHED=TRUE" ensures that all pixels touched by polygons are marked, not just those whose center is within the polygon.
+err_v = gdal.RasterizeLayer(mem_raster_v, [1], shape_layer_v, None, None, [1],  [att_,"ALL_TOUCHED=TRUE"]) # values in the rasterized layer are set to the value of the attribute
+assert err_v == gdal.CE_None # Assert that rasterizing shapefile layer into mem_raster_v was successful
 
-# In[17]:
-# ### Section - Prediction
-if process_multiple:
-    
+
+roi_v = mem_raster_v.ReadAsArray() # read the rasterized validation shapefile layer into a numpy array
+
+
+# Find how many non-zero entries we have -- i.e. how many validation data samples?
+n_val = (roi_v > 0).sum()
+print('{n} validation pixels'.format(n=n_val))
+print('{n} validation pixels'.format(n=n_val), file=open(results_txt, "a"))
+
+# Print validation data classes
+labels_v = np.unique(roi_v[roi_v > 0])
+print('validation data include {n} classes: {classes}'.format(n=labels_v.size, classes=labels_v))
+print('validation data include {n} classes: {classes}'.format(n=labels_v.size, classes=labels_v), file=open(results_txt, "a"))
+
+# Subset the classification image with the validation image = X
+# Mask the classes on the validation dataset = y
+# These will have n_samples rows
+X_v = class_prediction[roi_v > 0]
+y_v = roi_v[roi_v > 0]
+
+print('Our X matrix is sized: {sz_v}'.format(sz_v=X_v.shape))
+print('Our y array is sized: {sz_v}'.format(sz_v=y_v.shape))
+
+# Cross-tabulate predictions 
+convolution_mat = pd.crosstab(y_v, X_v, margins=True)
+print(convolution_mat)
+print(convolution_mat, file=open(results_txt, "a"))
+# if you want to save the confusion matrix as a CSV file:
+#savename = 'C:\\save\\to\\folder\\conf_matrix_' + str(est) + '.csv'
+#convolution_mat.to_csv(savename, sep=';', decimal = '.')
+
+# information about precision, recall, f1_score, and support:
+# http://scikit-learn.org/stable/modules/generated/sklearn.metrics.precision_recall_fscore_support.html
+#sklearn.metrics.precision_recall_fscore_support
+target_names = list()
+for name in range(1,(labels.size)+1):
+    target_names.append(str(name))
+sum_mat = classification_report(y_v,X_v,target_names=target_names)
+print(sum_mat)
+print(sum_mat, file=open(results_txt, "a"))
+
+# Overall Accuracy (OAA)
+print('OAA = {} %'.format(accuracy_score(y_v,X_v)*100))
+print('OAA = {} %'.format(accuracy_score(y_v,X_v)*100), file=open(results_txt, "a"))
+
+# Confusion Matrix
+cm_val = confusion_matrix(roi_v[roi_v > 0],class_prediction[roi_v > 0])
+plt.figure(figsize=(10,7))
+sn.heatmap(cm_val, annot=True, fmt='g')
+plt.xlabel('classes - predicted')
+plt.ylabel('classes - truth')
+
+del img_ds # close the image dataset
+
+# In[12]:#-------------------PREDICTION ON MULTIPLE TILES-------------------#
+#Check if there are multiple tiles to process
+if grid_ids:
     for index, (img_path, id_value) in enumerate(zip(img_path_list, id_values), start=1):
             start_time = datetime.datetime.now()
             img_ds_temp = gdal.Open(img_path, gdal.GA_ReadOnly)
@@ -425,11 +421,13 @@ if process_multiple:
             # Initialize a memory-mapped array to reduce memory usage
             img_temp = np.memmap(filename, dtype=gdal_array.GDALTypeCodeToNumericTypeCode(img_ds_temp.GetRasterBand(1).DataType),
                             mode='w+', shape=(img_ds_temp.RasterYSize, img_ds_temp.RasterXSize, img_ds_temp.RasterCount))
-
+            
+            # Read all bands of the image into the memory-mapped array
             for b in range(img_ds_temp.RasterCount):
                 band = img_ds_temp.GetRasterBand(b + 1)
                 img_temp[:, :, b] = band.ReadAsArray()
 
+            # Flatten multiple raster bands (3D array) into 2D array for classification
             img_as_array = np.nan_to_num(img_temp.reshape(-1, img_ds_temp.RasterCount))
 
             try:
@@ -478,6 +476,8 @@ if process_multiple:
             outdata.GetRasterBand(1).WriteArray(class_prediction_)
             outdata.FlushCache()
 
+            #Sieve output classification to remove very small areas of misclassified pixels
+            raster_sieve(output_file, output_folder, sieve_size = sieve_size, connected = eight_connected)
             print(f'Tile {index} of {len(img_path_list)} saved to: {output_file}')
 
             # Clean up
@@ -488,4 +488,8 @@ if process_multiple:
 
 print('Processing End: {}'.format(datetime.datetime.now()), file=open(results_txt, "a"))
 
-"""
+# In[13]: #------------------POST PROCESSING------------------#
+
+
+#stitch_rasters(output_folder, os.path.join(output_folder, 'ME_classified_masked.tif'))
+
