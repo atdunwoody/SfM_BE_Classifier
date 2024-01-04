@@ -60,7 +60,7 @@ train_val_grid_id, grid_path = create_grid([training,validation], DEM_path, in_d
 #Prepare input stacked rasters for random forest classification
 grid_ids = preprocess_function(grid_path, ortho_path, DEM_path, grid_ids, output_folder)
 #Create a list from the first elements of the grid_id dictionary
-print(grid_ids)
+
 # Check if train_val_grid_id is in grid_ids and remove it from grid_ids
 if train_val_grid_id in grid_ids:
     grid_ids.remove(train_val_grid_id)
