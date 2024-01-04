@@ -203,12 +203,13 @@ def call_trim(folder, output, target_raster_path):
 
 def pad_rasters_to_largest(source_rasters_folder, pad_value=0):
     """
-    Pads each source raster in the list to match the width and height of the largest raster found.
+    Pads each raster file in the source folder to match the width and height of the largest raster found.
+    Pads all bands of each raster with the specified pad value.
 
-    :param source_rasters_paths: List of paths to the source raster files.
-    :param output_rasters_dir: Directory where the extended rasters will be saved.
+    :param source_rasters_folder: Directory containing the source raster files.
     :param pad_value: The value used for padding. Defaults to 0.
     """
+
     def find_largest_dimensions(rasters_paths):
         """Finds the largest width and largest height from a list of raster paths."""
         max_width = 0
@@ -225,12 +226,12 @@ def pad_rasters_to_largest(source_rasters_folder, pad_value=0):
         return max_width, max_height
     
     source_rasters_paths = []
-    #Create list of all tif filepaths in folder
+    # Create list of all .tif filepaths in the folder
     for filename in os.listdir(source_rasters_folder):
         file_path = os.path.join(source_rasters_folder, filename)
-        # Check if the file is a DEM file (assuming .tif format for DEMs)
         if file_path.lower().endswith('.tif'):
             source_rasters_paths.append(file_path)
+
     # Find the largest dimensions among all rasters
     max_width, max_height = find_largest_dimensions(source_rasters_paths)
 
@@ -240,7 +241,7 @@ def pad_rasters_to_largest(source_rasters_folder, pad_value=0):
             src_data = src.read()  # Read all bands
             src_meta = src.meta
 
-        # Calculate the required padding
+        # Calculate the required padding for height and width
         pad_height = max(max_height - src_meta['height'], 0)
         pad_width = max(max_width - src_meta['width'], 0)
 
@@ -257,9 +258,13 @@ def pad_rasters_to_largest(source_rasters_folder, pad_value=0):
         else:
             padded_data = src_data
 
+        # Write the new raster
         with rasterio.open(source_raster_path, 'w', **src_meta) as out_raster:
             out_raster.write(padded_data)
-            
+
+
+
+         
 def main():
     folder = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test\Grid_Creation_Test\Tiled_Inputs"
     
@@ -269,11 +274,14 @@ def main():
     if not os.path.exists(output):
         os.makedirs(output)
    
-   
-    #pad_rasters_to_largest(folder, pad_value=0)
+    #check if there are any NaN values in the raster
     
-    #call_trim(folder, output, target)
-    print_res(folder)
+    
+    
+    
+    pad_rasters_to_largest(folder, pad_value=0)
+    #print_res(folder)
+
     
 if __name__ == "__main__":
     main()

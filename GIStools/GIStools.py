@@ -18,7 +18,7 @@ import numpy as np
 import geopandas as gpd
 
 
-def calculate_roughness(input_DEM, output_roughness):
+def calculate_roughness(input_DEM, output_roughness, verbose = False):
 # Open the DEM dataset
     dem_dataset = gdal.Open(input_DEM)
 
@@ -28,12 +28,13 @@ def calculate_roughness(input_DEM, output_roughness):
         # Perform roughness calculation
         gdal.DEMProcessing(output_roughness, dem_dataset, 'roughness')
 
-        print(f"Roughness raster created successfully at: {output_roughness}")
+        if verbose:
+            print(f"Roughness raster created successfully at: {output_roughness}")
 
     # Clean up and close the dataset
     dem_dataset = None
     
-def clip_rasters_by_extent(target_raster_paths, template_raster_path):
+def clip_rasters_by_extent(target_raster_paths, template_raster_path, verbose=False):
     """
     Clip a list of rasters by the extent of another raster and save the results.
 
@@ -73,8 +74,9 @@ def clip_rasters_by_extent(target_raster_paths, template_raster_path):
             # Save the clipped raster
             with rasterio.open(output_path, "w", **out_meta) as dest:
                 dest.write(clipped_array, 1)
-
-            print(f"Clipped raster saved to {output_path}")
+            
+            if verbose:
+                print(f"Clipped raster saved to {output_path}")
             clip_rasters.append(output_path)
     return clip_rasters
 
@@ -99,7 +101,6 @@ def mask_rasters_by_shapefile(raster_paths, shapefile_path, output_folder, id_va
 
     # Read the shapefile
     gdf = gpd.read_file(shapefile_path)
-    print(raster_paths)
     
     raster_outputs = {}
     for id_value in id_values:
@@ -191,7 +192,7 @@ def split_bands(input_raster, output_prefix, output_path, pop=False):
     ds = None  # Close the input file
     return output_files
 
-def stack_bands(input_raster_list, output_path=None, suffix = None):
+def stack_bands(input_raster_list, output_path=None, suffix = None, verbose=False):
     """
     Stack multiple single-band rasters into a multi-band raster.
 
@@ -227,7 +228,8 @@ def stack_bands(input_raster_list, output_path=None, suffix = None):
         raster_ds = gdal.Open(raster_path)
         band = raster_ds.GetRasterBand(1)
         out_ds.GetRasterBand(i).WriteArray(band.ReadAsArray())
-        print(f"Band {i} of ", len(input_raster_list), " stacked " "Path: ", raster_path)   
+        if verbose:
+            print(f"Band {i} of ", len(input_raster_list), " stacked " "Path: ", raster_path)   
 
     # Close datasets
     src_ds = None
@@ -235,7 +237,7 @@ def stack_bands(input_raster_list, output_path=None, suffix = None):
 
     return str(output_file)
 
-def processRGB(RGB_Path):
+def processRGB(RGB_Path, verbose = False):
     """
     Perform operations on provided R, G, B TIFF files and save the results as new TIFF files.
     Operations: EGI, Saturation, and normalized r, g, b.
@@ -309,10 +311,11 @@ def processRGB(RGB_Path):
     EGI_array = None
     Saturation_array = None
     
-    print("EGI and Saturation rasters created.")
+    if verbose:
+        print("EGI and Saturation rasters created.")
     return [Sat_output, EGI_output]
 
-def match_dem_resolution(source_dem_path, target_dem_path, output_path):
+def match_dem_resolution(source_dem_path, target_dem_path, output_path, verbose = False):
     """
     Match the resolution of one DEM to another DEM.
 
@@ -350,9 +353,10 @@ def match_dem_resolution(source_dem_path, target_dem_path, output_path):
 
     out_ds = None  # Close and save the file
 
-    print(f"Resampled DEM saved to: {output_path}")
+    if verbose:
+        print(f"Resampled DEM saved to: {output_path}")
 
-def preprocess_function(shapefile_path, ortho_filepath, DEM_filepath, grid_ids, output_folder):
+def preprocess_function(shapefile_path, ortho_filepath, DEM_filepath, grid_ids, output_folder, verbose=False):
     """
     Preprocess ortho and roughness data for specified grid cells for RF classification.
 
@@ -373,6 +377,9 @@ def preprocess_function(shapefile_path, ortho_filepath, DEM_filepath, grid_ids, 
         grid_ids = gpd.read_file(shapefile_path)['id'].tolist()
     
     for grid_id in grid_ids:
+        #Print update on progress
+        print(f"Processing grid ID: {grid_id} of {len(grid_ids)}")
+        
         # Create a subfolder for each grid ID
         grid_output_folder = os.path.join(output_folder, f'Grid_{grid_id}')
         Path(grid_output_folder).mkdir(parents=True, exist_ok=True)
@@ -388,13 +395,15 @@ def preprocess_function(shapefile_path, ortho_filepath, DEM_filepath, grid_ids, 
         # Step 4: Split bands of the ortho raster
        
         rgb_bands = split_bands(masked_ortho, 'ortho', grid_output_folder, pop =True)
-        print("Proccessing RGB Bands...")
+        if verbose:
+            print("Proccessing RGB Bands...")
         # Step 5: Process RGB bands
         processed_rgb = processRGB(rgb_bands)
         # Step 6: Append processed RGB to list
         rgb_bands.extend(processed_rgb)
         rasters_to_stack = rgb_bands
-        print("Rasters to stack: ", rasters_to_stack)
+        if verbose:
+            print("Rasters to stack: ", rasters_to_stack)
 
         # Step 7: Clip roughness raster by RGB shapefile
         
