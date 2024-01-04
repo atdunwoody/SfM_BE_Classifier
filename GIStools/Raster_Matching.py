@@ -279,8 +279,8 @@ def main():
     
     
     
-    pad_rasters_to_largest(folder, pad_value=0)
-    #print_res(folder)
+    #pad_rasters_to_largest(folder, pad_value=0)
+    print_res(folder)
 
     
 if __name__ == "__main__":

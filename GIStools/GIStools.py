@@ -81,7 +81,7 @@ def clip_rasters_by_extent(target_raster_paths, template_raster_path, verbose=Fa
     return clip_rasters
 
 
-def mask_rasters_by_shapefile(raster_paths, shapefile_path, output_folder, id_values, id_field='id', stack = False):
+def mask_rasters_by_shapefile(raster_paths, shapefile_path, output_folder, id_values, id_field='id', stack = False, verbose=False):
     """
     Mask a list of rasters by different polygons specified by id_values from a single shapefile. 
     Entire bounds of shapefile will not be used, only the portions of the raster within bounds of the polygons with the specified id_values will be retained.
@@ -141,7 +141,8 @@ def mask_rasters_by_shapefile(raster_paths, shapefile_path, output_folder, id_va
                 with rasterio.open(masked_raster_path, "w", **out_meta) as dest:
                     dest.write(out_image)
 
-                print(f"Masked raster saved to {masked_raster_path}")
+                if verbose:
+                    print(f"Masked raster saved to {masked_raster_path}")
                 masked_rasters_for_id.append(str(masked_raster_path))
 
         raster_outputs[id_value] = masked_rasters_for_id
@@ -204,7 +205,7 @@ def stack_bands(input_raster_list, output_path=None, suffix = None, verbose=Fals
     if not output_path:
         # Determine the base directory from the first input raster
         base_dir = Path(input_raster_list[0]).parent
-        output_file = base_dir / "stacked_bands_tile_input.tif"
+        output_file = os.path.join(base_dir, "stacked_bands_tile_input.tif")
     else:
         #create output folder if it does not exist
         Path(output_path).mkdir(parents=True, exist_ok=True)
@@ -378,7 +379,7 @@ def preprocess_function(shapefile_path, ortho_filepath, DEM_filepath, grid_ids, 
     
     for grid_id in grid_ids:
         #Print update on progress
-        print(f"Processing grid ID: {grid_id} of {len(grid_ids)}")
+        print(f"Pre-processing raster tile: {grid_id} of {len(grid_ids)}")
         
         # Create a subfolder for each grid ID
         grid_output_folder = os.path.join(output_folder, f'Grid_{grid_id}')
