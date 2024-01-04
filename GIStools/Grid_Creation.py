@@ -93,11 +93,10 @@ def create_grid(shapefile_paths, bounding_raster, output_folder):
     # Adjust startx/starty to align with the cell_bounds while ensuring coverage beyond the bounding raster
 
 
-    # Calculate the number of cells needed to cover the area in each direction
-    num_cells_x = math.ceil((raster_bounds[2] - startx) / grid_width)
-    num_cells_y = math.ceil((raster_bounds[3] - starty) / grid_height)
+    num_cells_x = math.ceil((raster_bounds.right - startx) / grid_width)
+    num_cells_y = math.ceil((raster_bounds.top - starty) / grid_height)
 
-    # Create the grid cells, populating above and to the right as well as below and to the left
+    # Create the grid cells
     cells = []
     for i in range(-num_cells_x, num_cells_x):
         for j in range(-num_cells_y, num_cells_y):
@@ -106,29 +105,28 @@ def create_grid(shapefile_paths, bounding_raster, output_folder):
             maxx = minx + grid_width
             maxy = miny + grid_height
             # Only add the cell if it intersects the raster
-            if (minx < raster_bounds[2] and maxx > raster_bounds[0]) and (miny < raster_bounds[3] and maxy > raster_bounds[1]):
+            if (minx < raster_bounds.right and maxx > raster_bounds.left) and (miny < raster_bounds.top and maxy > raster_bounds.bottom):
                 cells.append(box(minx, miny, maxx, maxy))
     
     # Create a GeoDataFrame
     grid = gpd.GeoDataFrame({'geometry': cells, 'id': range(1, len(cells) + 1)})
-    
     # Set the same CRS as the raster
     grid.crs = raster_crs
     
     # Ensure the output folder exists
-    if not os.path.exists(output_folder):
-        os.makedirs(output_folder)
+    grid_output_folder = os.path.join(output_folder, 'Grid')
+    if not os.path.exists(grid_output_folder):
+        os.makedirs(grid_output_folder)
 
-    # Define the output path
-    #Create output folder if it doesn't exist
-    if not os.path.exists(os.path.join(output_folder, 'Grid')):
-        os.makedirs(os.path.join(output_folder, 'Grid'))
+    output_path = os.path.join(grid_output_folder, 'grid.shp')
     
-    output_path = os.path.join(output_folder, 'Grid', 'grid.shp')
-    
-    # Save the grid to a shapefile
-    grid.to_file(output_path)
-    
+    try:
+        # Save the grid to a shapefile
+        grid.to_file(output_path)
+    except Exception as e:
+        print(f"Failed to save the grid shapefile: {e}")
+        return None, None
+
     grid_id = find_grid_id(cell_bounds, output_path)
     
     return grid_id, output_path

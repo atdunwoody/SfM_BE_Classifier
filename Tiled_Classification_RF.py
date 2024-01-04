@@ -23,7 +23,7 @@ from GIStools.Raster_Matching import pad_rasters_to_largest
 # In[1]: #-------------------User Defined Inputs-------------------#
 #Path to grid shapefile created in QGIS. Grid cell size will depend on processing capabilities of computer and extent of training & validation shapefiles
 #Training & Validation shapefiles should fit entirely within a single grid cell
-grid_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test\Grid_Creation_Test\grid.shp"
+grid_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test\Grid_Creation_Test\Grid_QGIS\Grid.shp"
 
 #Path to orthomosaic and DEM created in Metashape
 ortho_path = r"Z:\ATD\Drone Data Processing\Metashape Exports\Bennett\ME\11-4-23\GIS\ME_Ortho_1.77cm.tif"
@@ -31,8 +31,8 @@ DEM_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Te
 
 #Output folder for all generated Inputs and Results
 output_folder = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test\Grid_Creation_Test"
-grid_ids = []  # Choose grid IDs to process, or leave empty to process all grid cells
-#train_val_grid_id = '23'  # Identify single grid ID that contains training and validation data
+grid_ids = [1,2,3,4,5]  # Choose grid IDs to process, or leave empty to process all grid cells
+train_val_grid_id = '5'  # Identify single grid ID that contains training and validation data
 
 # Paths to training and validation as shape files. Training and validation shapefiles should be clipped to a single grid cell
 # Training and Validation shapefiles should be labeled with a single, NON ZERO  attribute that identifies bare earth and vegetation.
@@ -57,8 +57,9 @@ if not os.path.exists(output_folder):
 in_dir = os.path.join(output_folder, 'Tiled_Inputs')
 
 train_val_grid_id, grid_path = create_grid([training,validation], DEM_path, in_dir)
+
 #Prepare input stacked rasters for random forest classification
-grid_ids = preprocess_function(grid_path, ortho_path, DEM_path, grid_ids, output_folder)
+preprocess_function(grid_path, ortho_path, DEM_path, grid_ids, output_folder)
 #Create a list from the first elements of the grid_id dictionary
 
 # Check if train_val_grid_id is in grid_ids and remove it from grid_ids
@@ -415,6 +416,9 @@ del train_tile # close the image dataset
 if grid_ids:
     for index, (img_path, id_value) in enumerate(zip(img_path_list, id_values), start=1):
             start_time = datetime.datetime.now()
+            #Drop the first character of the id_value if it starts with a _
+            if id_value[0] == '_':
+                id_value = id_value[1:]
             train_tile_temp = gdal.Open(img_path, gdal.GA_ReadOnly)
             print(f"Processing {img_path}, ID value: {id_value}")
 
@@ -422,10 +426,13 @@ if grid_ids:
             temp_file = tempfile.NamedTemporaryFile(delete=False)
             filename = temp_file.name
             temp_file.close()  # Close the file so np.memmap can use it
+            print(f"Temporary file: {filename}")
 
             # Initialize a memory-mapped array to reduce memory usage
             img_temp = np.memmap(filename, dtype=gdal_array.GDALTypeCodeToNumericTypeCode(train_tile_temp.GetRasterBand(1).DataType),
                             mode='w+', shape=(train_tile_temp.RasterYSize, train_tile_temp.RasterXSize, train_tile_temp.RasterCount))
+            
+            print(f"Temporary array shape: {img_temp.shape}")
             
             # Read all bands of the image into the memory-mapped array
             for b in range(train_tile_temp.RasterCount):
@@ -434,9 +441,10 @@ if grid_ids:
 
             # Flatten multiple raster bands (3D array) into 2D array for classification
             train_tile_2Darray = np.nan_to_num(img_temp.reshape(-1, train_tile_temp.RasterCount))
-
+            print(f"Reshaped from {img_temp.shape} to {train_tile_2Darray.shape}")
             try:
                 class_prediction = rf.predict(train_tile_2Darray)
+                print(f"Classified {img_path}")
             except MemoryError:
                 slices = int(round(len(train_tile_2Darray) / 2))
                 test = True
@@ -482,7 +490,7 @@ if grid_ids:
             outdata.FlushCache()
 
             #Sieve output classification to remove very small areas of misclassified pixels
-            raster_sieve(output_file, output_folder, sieve_size = sieve_size, connected = eight_connected)
+            #raster_sieve(output_file, output_folder, sieve_size = sieve_size, connected = eight_connected)
             print(f'Tile {index} of {len(img_path_list)} saved to: {output_file}')
 
             # Clean up
