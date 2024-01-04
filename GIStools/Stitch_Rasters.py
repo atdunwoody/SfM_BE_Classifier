@@ -3,7 +3,7 @@ import rasterio
 from rasterio.merge import merge
 import os
 
-def stitch_rasters(raster_paths, output_raster_path):
+def stitch_rasters(in_dir, output_raster_path):
     """
     Stitches multiple rasters into a single raster.
 
@@ -12,7 +12,7 @@ def stitch_rasters(raster_paths, output_raster_path):
     """
     # List to hold the raster datasets
     raster_datasets = []
-
+    raster_paths, suffix = find_files(in_dir)
     try:
         # Open each raster and add it to the list
         
@@ -71,9 +71,8 @@ def find_files(directory, file_name=None):
 
 def main():
     in_dir = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Initial_Inputs_Automated\Tiled_Inputs"
-    inputs, suffix = find_files(in_dir)
     output = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Initial_Inputs_Automated\Tiled_Inputs\ME_Initial__Stitched.tif"
-    stitch_rasters(inputs, output)
+    stitch_rasters(in_dir, output)
 
 if __name__ == '__main__':
     main()
