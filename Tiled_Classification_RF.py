@@ -15,7 +15,7 @@ import datetime
 gdal.UseExceptions()
 gdal.AllRegister()
 from GIStools.GIStools import preprocess_function 
-from GIStools.Raster_Seive import raster_sieve
+from GIStools.Raster_Sieve import raster_sieve
 from GIStools.Stitch_Rasters import stitch_rasters
 
 
