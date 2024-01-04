@@ -378,8 +378,8 @@ def preprocess_function(shapefile_path, ortho_filepath, DEM_filepath, grid_ids, 
         grid_ids = gpd.read_file(shapefile_path)['id'].tolist()
     
     for grid_id in grid_ids:
-        #Print update on progress
-        print(f"Pre-processing raster tile: {grid_id} of {len(grid_ids)}")
+        #Print update on progress using actual iteration number instead of grid_id
+        print(f"Processing grid cell {grid_ids.index(grid_id) + 1} of {len(grid_ids)}")
         
         # Create a subfolder for each grid ID
         grid_output_folder = os.path.join(output_folder, f'Grid_{grid_id}')
@@ -408,7 +408,7 @@ def preprocess_function(shapefile_path, ortho_filepath, DEM_filepath, grid_ids, 
 
         # Step 7: Clip roughness raster by RGB shapefile
         
-        clipped_roughness = clip_rasters_by_extent([masked_rasters[grid_id][1]], masked_ortho)[0]
+        clipped_roughness = clip_rasters_by_extent([masked_rasters[grid_id][1]], masked_ortho, verbose=verbose)[0]
 
         # Step 8: Match DEM resolution
         matched_roughness_path = os.path.join(grid_output_folder, 'matched_roughness.tif')
@@ -418,8 +418,11 @@ def preprocess_function(shapefile_path, ortho_filepath, DEM_filepath, grid_ids, 
         matched_roughness_path.extend(rasters_to_stack)
 
         # Step 10: Stack bands
+        
         output_folder_stacked = os.path.join(output_folder,"Tiled_Inputs")
-        stacked_output = stack_bands(matched_roughness_path, output_folder_stacked, suffix = grid_id)
+        if not os.path.exists(output_folder_stacked):
+            os.makedirs(output_folder_stacked)
+        stacked_output = stack_bands(matched_roughness_path, output_folder_stacked, suffix = grid_id, verbose=verbose)
 
         outputs[grid_id] = stacked_output
         #Close datasets

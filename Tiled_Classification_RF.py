@@ -31,8 +31,8 @@ DEM_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Te
 
 #Output folder for all generated Inputs and Results
 output_folder = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test\Grid_Creation_Test"
-grid_ids = [1,2,3,4,5]  # Choose grid IDs to process, or leave empty to process all grid cells
-train_val_grid_id = '5'  # Identify single grid ID that contains training and validation data
+grid_ids = []  # Choose grid IDs to process, or leave empty to process all grid cells
+#train_val_grid_id = '8'  # Identify single grid ID that contains training and validation data
 
 # Paths to training and validation as shape files. Training and validation shapefiles should be clipped to a single grid cell
 # Training and Validation shapefiles should be labeled with a single, NON ZERO  attribute that identifies bare earth and vegetation.
@@ -59,12 +59,11 @@ in_dir = os.path.join(output_folder, 'Tiled_Inputs')
 train_val_grid_id, grid_path = create_grid([training,validation], DEM_path, in_dir)
 
 #Prepare input stacked rasters for random forest classification
-preprocess_function(grid_path, ortho_path, DEM_path, grid_ids, output_folder)
+grid_ids = preprocess_function(grid_path, ortho_path, DEM_path, grid_ids, output_folder)
 #Create a list from the first elements of the grid_id dictionary
 
 # Check if train_val_grid_id is in grid_ids and remove it from grid_ids
-if train_val_grid_id in grid_ids:
-    grid_ids.remove(train_val_grid_id)
+
     
 pad_rasters_to_largest(in_dir)
 
