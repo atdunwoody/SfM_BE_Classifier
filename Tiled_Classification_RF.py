@@ -18,7 +18,7 @@ from GIStools.GIStools import preprocess_function
 from GIStools.Raster_Sieve import raster_sieve
 from GIStools.Stitch_Rasters import stitch_rasters
 from GIStools.Grid_Creation import create_grid
-
+from GIStools.Raster_Matching import pad_rasters_to_largest
 
 # In[1]: #-------------------User Defined Inputs-------------------#
 #Path to grid shapefile created in QGIS. Grid cell size will depend on processing capabilities of computer and extent of training & validation shapefiles
@@ -65,6 +65,7 @@ print(grid_ids)
 if train_val_grid_id in grid_ids:
     grid_ids.remove(train_val_grid_id)
     
+pad_rasters_to_largest(in_dir)
 
 # grid-clipped-image containing the training data
 train_tile_path = os.path.join(in_dir, f'stacked_bands_tile_input_{train_val_grid_id}.tif')
