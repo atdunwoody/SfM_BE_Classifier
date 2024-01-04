@@ -16,9 +16,23 @@ import geopandas as gpd
 import numpy as np
 
 import geopandas as gpd
-from DEM_to_Roughness import calculate_roughness
 
 
+def calculate_roughness(input_DEM, output_roughness):
+# Open the DEM dataset
+    dem_dataset = gdal.Open(input_DEM)
+
+    if not dem_dataset:
+        print("Failed to open the DEM file.")
+    else:
+        # Perform roughness calculation
+        gdal.DEMProcessing(output_roughness, dem_dataset, 'roughness')
+
+        print(f"Roughness raster created successfully at: {output_roughness}")
+
+    # Clean up and close the dataset
+    dem_dataset = None
+    
 def clip_rasters_by_extent(target_raster_paths, template_raster_path):
     """
     Clip a list of rasters by the extent of another raster and save the results.

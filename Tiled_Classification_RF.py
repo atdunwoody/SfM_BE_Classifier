@@ -14,11 +14,11 @@ import datetime
 # Tell GDAL to throw Python exceptions, and register all drivers
 gdal.UseExceptions()
 gdal.AllRegister()
+from GIStools.GIStools import preprocess_function 
 
 
 
-
-# In[3]:
+# In[1]:
     
 def find_files(directory, file_name=None):
     found_files = []
@@ -51,6 +51,14 @@ est = 300
 # -1 -> all available cores
 n_cores = -1
 
+grid_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test\grid.shp"
+ortho_path = r"Z:\ATD\Drone Data Processing\Metashape Exports\Bennett\ME\11-4-23\GIS\ME_Ortho_1.77cm.tif"
+DEM_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test\ME_DEM_Initial_Clipped.tif"
+output_folder = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test"
+grid_ids = []  # Choose grid IDs to process, or leave empty to process all grid cells
+
+preprocess_function(grid_path, ortho_path, DEM_path, grid_ids, output_folder)
+"""
 # grid-clipped-image containing the training data
 img_RS = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Spring_2023_Inputs_Automated\Tiled_Inputs_v2\Tile_38.tif"
 print('Training Image: {}'.format(img_RS))
@@ -67,12 +75,7 @@ img_path_list, id_values = find_files(in_dir)
 
 #img_path_list = [r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Inputs_Automated\Grid_15\stacked_bands_output.tif"]  # Replace with actual paths
 
-del img_path_list[0:28]
-del id_values[0:28]
 
-
-print(img_path_list)
-print(id_values)
 # directory, where the classification image should be saved:
 output_folder = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Results\ME_Initial_Full_Run"
 if not os.path.exists(output_folder):
@@ -87,7 +90,7 @@ results_txt = os.path.join(output_folder, 'ME_Initial_results.txt')
 process_multiple = True
 validate = False
 
-# In[4]:
+# In[2]:
 
 
 #-------------------SHAPEFILE DATA EXTRACTION-------------------#
@@ -485,3 +488,4 @@ if process_multiple:
 
 print('Processing End: {}'.format(datetime.datetime.now()), file=open(results_txt, "a"))
 
+"""
