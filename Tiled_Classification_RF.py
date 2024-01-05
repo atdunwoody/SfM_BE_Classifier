@@ -21,12 +21,9 @@ from GIStools.Grid_Creation import create_grid
 from GIStools.Raster_Matching import pad_rasters_to_largest
 
 # In[1]: #-------------------User Defined Inputs-------------------#
-#Path to grid shapefile created in QGIS. Grid cell size will depend on processing capabilities of computer and extent of training & validation shapefiles
-#Training & Validation shapefiles should fit entirely within a single grid cell
-grid_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test\Grid_Creation_Test\Grid_QGIS\Grid.shp"
 
-#Path to orthomosaic and DEM created in Metashape
-ortho_path = r"Z:\ATD\Drone Data Processing\Metashape Exports\Bennett\ME\11-4-23\GIS\ME_Ortho_1.77cm.tif"
+#Path to orthomosaic and DEM created in SfM processing
+ortho_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test\Grid_Creation_Test\Full_Ortho_Clipped_v1.tif"
 DEM_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test\Grid_Creation_Test\Full_DEM_Clipped_v1.tif"
 
 #Output folder for all generated Inputs and Results
@@ -46,7 +43,7 @@ n_cores = -1 # -1 -> all available computing cores will be used (default = -1)
 sieve_size = 36 # Size of sieve kernel will depend on cell size, (default = 36 set for 1.77cm cell size)
 eight_connected = True # Set to True to remove 8-connected pixels, set to False to remove 4-connected pixels (default = True)
 
-stitch = False # Set to True to stitch all classified tiles into a single image, set to False to keep classified tiles in separate rasters (default = True)
+stitch = True # Set to True to stitch all classified tiles into a single image, set to False to keep classified tiles in separate rasters (default = True)
 
 # In[2]: #--------------------Preprocessing-----------------------------#
 #Create output folder if it doesn't exist
@@ -57,7 +54,7 @@ if not os.path.exists(output_folder):
 in_dir = os.path.join(output_folder, 'Tiled_Inputs')
 
 train_val_grid_id, grid_path = create_grid([training,validation], DEM_path, in_dir)
-
+grid_ids.append(train_val_grid_id)
 #Prepare input stacked rasters for random forest classification
 grid_ids = preprocess_function(grid_path, ortho_path, DEM_path, grid_ids, output_folder)
 #Create a list from the first elements of the grid_id dictionary
@@ -489,7 +486,8 @@ if grid_ids:
             outdata.FlushCache()
 
             #Sieve output classification to remove very small areas of misclassified pixels
-            #raster_sieve(output_file, output_folder, sieve_size = sieve_size, connected = eight_connected)
+            if not stitch:
+                raster_sieve(output_file, output_folder, sieve_size = sieve_size, connected = eight_connected)
             print(f'Tile {index} of {len(img_path_list)} saved to: {output_file}')
 
             # Clean up
@@ -504,5 +502,6 @@ print('Processing End: {}'.format(datetime.datetime.now()), file=open(results_tx
 
 if stitch:
     print('Stitching rasters')
-    stitch_rasters(output_folder, os.path.join(output_folder, 'Stitched_Classified_Image.tif'))
-
+    stitched_raster_path = os.path.join(output_folder, 'Stitched_Classified_Image.tif')
+    stitch_rasters(output_folder, stitched_raster_path)
+    raster_sieve(stitched_raster_path, output_folder, sieve_size = sieve_size, connected = eight_connected)
