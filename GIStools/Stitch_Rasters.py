@@ -6,24 +6,14 @@ import os
 
 def stitch_rasters(in_dir, output_raster_path):
     """
-    Stitches multiple rasters into a single raster, one at a time.
+    Stitches multiple rasters into a single raster.
 
     :param raster_paths: List of paths to the raster files to be stitched.
     :param output_raster_path: Path where the stitched raster will be saved.
     """
-    try:
-        # Open the first raster to initialize the stitched raster
-        stitched_raster = rasterio.open(raster_paths[0])
-        print("Stitching raster: " + raster_paths[0] + " stitching (0.00%) completed.")
-        for raster_path in raster_paths[1:]:
-            #print progress as a percentage
-            print(f"Stitching raster: {raster_path}") 
-            print(f"Stitching {raster_paths.index(raster_path) / len(raster_paths) * 100:.2f}% completed.")
-            with rasterio.open(raster_path) as src:
-                # Merge the current raster with the stitched raster
-                mosaic, out_trans = merge([stitched_raster, src])
     # List to hold the raster datasets
     raster_datasets = []
+
     raster_paths, suffix = find_files(in_dir)
     try:
         # Open each raster and add it to the list
@@ -39,27 +29,23 @@ def stitch_rasters(in_dir, output_raster_path):
         # Copy the metadata
         out_meta = raster_datasets[0].meta.copy()
 
-                # Update the metadata with new dimensions and transformation
-                out_meta = stitched_raster.meta.copy()
-                out_meta.update({
-                    "height": mosaic.shape[1],
-                    "width": mosaic.shape[2],
-                    "transform": out_trans
-                })
+        # Update the metadata with new dimensions and transformation
+        out_meta.update({
+            "driver": "GTiff",
+            "height": mosaic.shape[1],
+            "width": mosaic.shape[2],
+            "transform": out_trans
+        })
 
-                # Close the current stitched raster
-                stitched_raster.close()
-                print('Stitched Raster Closed. Writing to Temporary Raster.')
-                # Write the current mosaic to a temporary raster
-                with rasterio.open(output_raster_path, "w", **out_meta) as temp_dest:
-                    temp_dest.write(mosaic)
-
-                # Reopen the updated stitched raster for the next iteration
-                stitched_raster = rasterio.open(output_raster_path)
+        # Write the mosaic raster to disk
+        with rasterio.open(output_raster_path, "w", **out_meta) as dest:
+            dest.write(mosaic)
 
     finally:
-        # Close the stitched raster dataset
-        stitched_raster.close()
+        # Close all raster datasets
+        for src in raster_datasets:
+            src.close()
+                 
             
 def find_files(directory, file_name=None):
     found_files = []
