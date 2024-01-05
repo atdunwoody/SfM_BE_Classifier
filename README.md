@@ -1,12 +1,32 @@
 ## SfM_BE_Classifier
-Random forest classification of bare earth and vegetation for raster files too large for memory. This workflow was made for drone based Structure from Motion (SfM) data and requires the following inputs: red, green, and blue bands as well as a roughness raster derived from the SfM DEM. Currently, the workflow is semi-automated and requires a few pre-processing steps in QGIS. 
+Random forest classification of bare earth and vegetation for raster files too large for memory. This workflow was made for drone based Structure from Motion (SfM)  datasets, which typically produce very fine resolution rasters. These rasters often have a resolution of less than 10 centimeters, so watershed-sized survey areas result in rasters that are too large to fit in memory. 
+
+This workflow leverages the fine resolution elevation and RGB data provided by SfM processing to classify bare earth pixels for elevation change detection studies. The code was tested on a dataset of mountainous, wildfire burned watershed with an orthomosaic resolution of 1.8 cm amd a DEM Resolution of 3.6 cm.  
+
+Inputs:
+ - Orthomosaic (red, green, and blue bands)
+ - DEM
+ - Training and Validation shapefiles  
+
+Tips on creating training and validation shapefiles:
+ - Use nonzero integers to identify classification categories. Zero is the nodata value.
+ - Balance the classes in your training shapefile. If there is significantly more pixels of one class in your training data than another (e.g. 10X more vegetation pixels than bare earth) the model may be biased torwards misclassifying bare earth pixels as vegetation.
+ - Beware of data leakage. Make sure training and validation shapefiles do not overlap. Additionally, if you run your model multiple times and change the training data or hyperparameters between each run to try to improve performance on the validation data, the model may "learn" to perform on that specific validation set. It is good practice to have a subset of your validation data thatthe final trained model only sees once.
 
 ![Workflow](Docs/Workflow.jpg)
 
-# QGIS
-Initially a 300m x 300m grid shapefile is created within QGIS to match the extent of the orthomosaic, delineating the study area for subsequent analyses and a roughness raster is derived from the DEM using the GDAL roughness tool. 
+# Installation
+Clone this GitHub repository, or download the entire repository to your local machine. Do not move any of the files within the repository, as this may cause the workflow to break.
+Create a virtual environment called `SfM_RF` in miniconda3 by opening the Anaconda Prompt and installing the `environment.yml` file:
 
-# Python
-The Python GIStools.py script then extracts relevant features from these inputs for the random forest algorithm and tiles the raster inputs, which is necessary when working with very large raster datasets. The preprocess_function within this script executes multiple tasks including: extraction of RGB and roughness tiles, creation Excessive Green Index (EGI) and saturation rasters from RGB bands, alignment of all rasters to the smallest extent and highest resolution, and finally compilation of raster bands for Random Forest processing. In the final preprocessing step, the `Raster_Matching.py` script ensures the uniformity in raster dimensions necessary for random forest algorithm execution.  
+`cd insert/path/to/SfM_BE_Classifier/folder`
+`conda env create -f environment.yml`
 
-The `Tiled_Classification_RF.py` script, based on work from Florian Beyer and Chris Holden, trains and implements a random forest algorithm on the set of preprocessed tiles (Beyer et al., 2019). This step requires a training and validation shapefile input containing numerically labeled bare earth and vegetation features and produces classified tiles as well as a log file with a confusion matrix. The performance of the algorithm can be improved by using the sieving function of the remotior-sensus Python library which filters out isolated patches less than 36 contiguous pixels of vegetation or bare earth. Each pixel in the classification raster is 1.77 cm<sup>2</sup>, so this filtration was performed on the assumption that patches of bare earth or vegetation that are less than 0.005 - 0.01 m<sup>2</sup> are likely artifacts of the classification algorithm. This sieving step is incorporated into the `Filter_rasters.py` script, which extracts only bare earth values from the original DEM. The process culminates in the generation of multiple DEM tiles. These tiles can either be analyzed individually, to conserve computational resources, or combined into a single file using the `Stitch_Rasters.py` script.   
+# QGIS Post-Processing
+Performance is improved by "sieving" the final output classified raster to remove very small patches of possibly misclassified pixels. The idea behind this step is that patches of bare earth that are less than a few dozen square centimeters are likely artifacts of the classification process and should be reclassified as the dominant surrounding class. 
+
+This step is currently most easily performed in the SCP Plugin for QGIS. 
+
+# Acknowledgements
+This workflow is based on work from Florian Beyer and Chris Holden (Beyer et al., 2019). 
+
