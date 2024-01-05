@@ -13,7 +13,6 @@ Tips on creating training and validation shapefiles:
  - Balance the classes in your training shapefile. If there is significantly more pixels of one class in your training data than another (e.g. 10X more vegetation pixels than bare earth) the model may be biased torwards misclassifying bare earth pixels as vegetation.
  - Beware of data leakage. Make sure training and validation shapefiles do not overlap. Additionally, if you run your model multiple times and change the training data or hyperparameters between each run to try to improve performance on the validation data, the model may "learn" to perform on that specific validation set. It is good practice to have a subset of your validation data thatthe final trained model only sees once.
 
-![Workflow](Docs/Workflow.jpg)
 
 # Installation
 Clone this GitHub repository, or download the entire repository to your local machine. Do not move any of the files within the repository, as this may cause the workflow to break.
