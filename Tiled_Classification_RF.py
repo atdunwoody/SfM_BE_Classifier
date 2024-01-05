@@ -1,3 +1,26 @@
+"""
+SfM_BE_Classifier - Random Forest Classification Program
+
+This script performs Random Forest classification on geospatial image data to identify bare earth pixels. 
+The program is designed to process and classify orthomosaic and DEM data created in SfM processing.
+It utilizes machine learning and image processing libraries to preprocess data, extract features, train a classifier, 
+and predict classes across multiple tiles. The result is a classified raster identifying bare earth and vegetation.
+
+User-Defined Inputs:
+- Paths to orthomosaic and DEM files.
+- Output directory for results.
+- Training and validation data paths.
+- Classification parameters including the number of trees, processing cores, and sieving specifications.
+
+The script supports both training on specific grid cells and validation using shapefiles with labeled data.
+
+Author: Alex Thornton-Dunwoody
+Based on work from Florian Beyer and Chris Holden (Beyer et al., 2019)
+Created on: 12/15/2023
+Last Updated: 1/5/2024
+
+"""
+
 
 import os, tempfile
 from osgeo import gdal, ogr, gdal_array # I/O image data
