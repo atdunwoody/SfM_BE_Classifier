@@ -2,8 +2,6 @@ import numpy as np
 import os
 from osgeo import gdal
 import rasterio
-
-
 def print_res(folder_path):
     """
     Print the resolution, width, and height of all DEM files in a folder.
@@ -117,9 +115,7 @@ def pad_rasters(source_rasters_paths, target_raster_path, output_rasters_dir, pa
         else:
             padded_data = src_data
 
-        # Extract filename from the source raster path and construct output raster path
-        filename = os.path.basename(source_raster_path)
-        output_raster_path = os.path.join(output_rasters_dir, filename.replace('.tif', '_extended.tif'))
+        output_raster_path = output_rasters_dir
 
         # Write the new raster
         print('Writing: ', output_raster_path)
@@ -204,25 +200,88 @@ def call_trim(folder, output, target_raster_path):
                 out_raster.write(src_data)
             print('Finished processing', filename)
 
+
+def pad_rasters_to_largest(source_rasters_folder, pad_value=0):
+    """
+    Pads each raster file in the source folder to match the width and height of the largest raster found.
+    Pads all bands of each raster with the specified pad value.
+
+    :param source_rasters_folder: Directory containing the source raster files.
+    :param pad_value: The value used for padding. Defaults to 0.
+    """
+
+    def find_largest_dimensions(rasters_paths):
+        """Finds the largest width and largest height from a list of raster paths."""
+        max_width = 0
+        max_height = 0
+
+        for raster_path in rasters_paths:
+            with rasterio.open(raster_path) as raster:
+                width, height = raster.width, raster.height
+                if width > max_width:
+                    max_width = width
+                if height > max_height:
+                    max_height = height
+
+        return max_width, max_height
+    
+    source_rasters_paths = []
+    # Create list of all .tif filepaths in the folder
+    for filename in os.listdir(source_rasters_folder):
+        file_path = os.path.join(source_rasters_folder, filename)
+        if file_path.lower().endswith('.tif'):
+            source_rasters_paths.append(file_path)
+
+    # Find the largest dimensions among all rasters
+    max_width, max_height = find_largest_dimensions(source_rasters_paths)
+
+    # Process each source raster
+    for source_raster_path in source_rasters_paths:
+        with rasterio.open(source_raster_path) as src:
+            src_data = src.read()  # Read all bands
+            src_meta = src.meta
+
+        # Calculate the required padding for height and width
+        pad_height = max(max_height - src_meta['height'], 0)
+        pad_width = max(max_width - src_meta['width'], 0)
+
+        # Check if padding is necessary
+        if pad_height > 0 or pad_width > 0:
+            # Pad each band of the source raster
+            padded_data = np.pad(src_data, ((0, 0), (0, pad_height), (0, pad_width)), 'constant', constant_values=pad_value)
+
+            # Update the metadata for the new dimensions
+            src_meta.update({
+                'height': max_height,
+                'width': max_width
+            })
+        else:
+            padded_data = src_data
+
+        # Write the new raster
+        with rasterio.open(source_raster_path, 'w', **src_meta) as out_raster:
+            out_raster.write(padded_data)
+
+
+
+         
 def main():
-    folder = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Initial_Inputs_Automated\Tiled_Inputs"
+    folder = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test\Grid_Creation_Test\Tiled_Inputs"
     
-
-
-    source = [
-    r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Initial_Inputs_Automated\Tiled_Inputs\stacked_bands_output_43.tif",
-    r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Initial_Inputs_Automated\Tiled_Inputs\stacked_bands_output_44.tif"]
-
-   
-    target = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Initial_Inputs_Automated\Tiled_Inputs\stacked_bands_output_26.tif"
-    output = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Inputs\Initial_Inputs_Automated\Tiled_Inputs"
-
-   
-   
-    #pad_rasters(source, target, output, pad_value=0)
     
-    call_trim(folder, output, target)
-    print(print_res(output))
+    output = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test\Grid_Creation_Test\Tiled_Inputs\Padded"
+    #Create output folder if it doesn't exist
+    if not os.path.exists(output):
+        os.makedirs(output)
+   
+    #check if there are any NaN values in the raster
+    
+    
+    
+    
+    #pad_rasters_to_largest(folder, pad_value=0)
+    print_res(folder)
+
     
 if __name__ == "__main__":
     main()
