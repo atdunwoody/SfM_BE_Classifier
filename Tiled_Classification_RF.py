@@ -19,7 +19,6 @@ from GIStools.Stitch_Rasters import stitch_rasters
 from GIStools.Grid_Creation import create_grid
 from GIStools.Raster_Matching import pad_rasters_to_largest
 
-from multiprocessing import freeze_support
 # In[1]: #-------------------User Defined Inputs-------------------#
 
 #Path to orthomosaic and DEM created in SfM processing
