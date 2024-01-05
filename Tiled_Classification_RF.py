@@ -15,7 +15,6 @@ import datetime
 gdal.UseExceptions()
 gdal.AllRegister()
 from GIStools.GIStools import preprocess_function 
-from GIStools.Raster_Sieve import raster_sieve
 from GIStools.Stitch_Rasters import stitch_rasters
 from GIStools.Grid_Creation import create_grid
 from GIStools.Raster_Matching import pad_rasters_to_largest
@@ -29,7 +28,7 @@ DEM_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Te
 #Output folder for all generated Inputs and Results
 output_folder = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test\Grid_Creation_Test"
 grid_ids = []  # Choose grid IDs to process, or leave empty to process all grid cells
-#train_val_grid_id = '8'  # Identify single grid ID that contains training and validation data
+process_training_only = True # Set to True to only process the training tile, set to False to process all grid cells
 
 # Paths to training and validation as shape files. Training and validation shapefiles should be clipped to a single grid cell
 # Training and Validation shapefiles should be labeled with a single, NON ZERO  attribute that identifies bare earth and vegetation.
@@ -54,11 +53,12 @@ if not os.path.exists(output_folder):
 in_dir = os.path.join(output_folder, 'Tiled_Inputs')
 
 train_val_grid_id, grid_path = create_grid([training,validation], DEM_path, in_dir)
-grid_ids.append(train_val_grid_id)
+if process_training_only:
+    grid_ids.append(train_val_grid_id)
 #Prepare input stacked rasters for random forest classification
 grid_ids = preprocess_function(grid_path, ortho_path, DEM_path, grid_ids, output_folder)
 #Create a list from the first elements of the grid_id dictionary
-
+print("Grid IDs: ", grid_ids)
 # Check if train_val_grid_id is in grid_ids and remove it from grid_ids
 
     
@@ -486,8 +486,8 @@ if grid_ids:
             outdata.FlushCache()
 
             #Sieve output classification to remove very small areas of misclassified pixels
-            if not stitch:
-                raster_sieve(output_file, output_folder, sieve_size = sieve_size, connected = eight_connected)
+            #if not stitch:
+                #raster_sieve(output_file, output_folder, sieve_size = sieve_size, connected = eight_connected)
             print(f'Tile {index} of {len(img_path_list)} saved to: {output_file}')
 
             # Clean up
@@ -499,9 +499,13 @@ if grid_ids:
 print('Processing End: {}'.format(datetime.datetime.now()), file=open(results_txt, "a"))
 
 # In[13]: #------------------POST PROCESSING------------------#
+    
 
 if stitch:
     print('Stitching rasters')
     stitched_raster_path = os.path.join(output_folder, 'Stitched_Classified_Image.tif')
     stitch_rasters(output_folder, stitched_raster_path)
-    raster_sieve(stitched_raster_path, output_folder, sieve_size = sieve_size, connected = eight_connected)
+    
+
+
+    
