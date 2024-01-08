@@ -65,6 +65,7 @@ process_training_only = True # Set to True to only process the training tile, se
 
 est = 300 # define number of trees that will be used to build random forest (default = 300)
 n_cores = -1 # -1 -> all available computing cores will be used (default = -1)
+verbose=True # Set to True to print out each tree progression, set to False to not print out each tree progression (default = True)
 
 #Sieveing parameters: Removing small areas of potential misclassified pixels
 sieve_size = 36 # Size of sieve kernel will depend on cell size, (default = 36 set for 1.77cm cell size)
@@ -80,31 +81,44 @@ if not os.path.exists(output_folder):
 #List of grid-clipped images to classify and associated id values
 in_dir = os.path.join(output_folder, 'Tiled_Inputs')
 
+#Create grid cells to process large rasters in chunks. 
+#Each grid cell is the size of the extent training and validation shapefiles
 train_val_grid_id, grid_path = create_grid([training,validation], DEM_path, in_dir)
+#This will cause preprocess function to only process the training tile
 if process_training_only:
     grid_ids.append(train_val_grid_id)
 #Prepare input stacked rasters for random forest classification
+#Bands output from preprocess function: Roughness, R, G, B, Saturation, Excessive Green Index
 grid_ids = preprocess_function(grid_path, ortho_path, DEM_path, grid_ids, output_folder)
-#Create a list from the first elements of the grid_id dictionary
 print("Grid IDs: ", grid_ids)
-# Check if train_val_grid_id is in grid_ids and remove it from grid_ids
 
-#Check if grid_ids has a length of 1, if so, set Stitch to False, since there's no rasters to stitch
-if len(grid_ids) == 1:
-    stitch = False
-    print('Stitching set to False, only one grid cell to process')
+
+#Ensure all rasters are the same size by padding smaller rasters with 0s
+#Having raster tiles of identical sizes is required for random forest classification
 pad_rasters_to_largest(in_dir)
 
 # grid-clipped-image containing the training data
 train_tile_path = os.path.join(in_dir, f'stacked_bands_tile_input_{train_val_grid_id}.tif')
 print('Training Image: {}'.format(train_tile_path))
 
+#output folder for list of img_path_list grid-clipped classified images
+classification_image = os.path.join(output_folder, 'Classified_Training_Image.tif')
+
+# directory, where the all meta results should be saved:
+results_txt = os.path.join(output_folder, 'Results_Summary.txt')
+
 # directory, where the classification image should be saved:
 output_folder = os.path.join(output_folder, 'Results')
 if not os.path.exists(output_folder):
     os.makedirs(output_folder)
     
-    
+#Check if grid_ids has a length of 1, if so, set Stitch to False, since there's no rasters to stitch
+if len(grid_ids) == 1:
+    stitch = False
+    print('Stitching set to False, only one grid cell to process')
+
+
+  
 def find_files(directory, file_name=None):
     found_files = []
     suffix_list = []
@@ -132,29 +146,27 @@ def find_files(directory, file_name=None):
 
 img_path_list, id_values = find_files(in_dir)
 
-#output folder for list of img_path_list grid-clipped classified images
-classification_image = os.path.join(output_folder, 'Classified_Training_Image.tif')
 
-# directory, where the all meta results should be saved:
-results_txt = os.path.join(output_folder, 'Results_Summary.txt')
 
 
 # In[3]: #-------------------SHAPEFILE DATA EXTRACTION-------------------#
 
 #model_dataset = gdal.Open(model_raster_fname)
-shape_dataset = ogr.Open(training)
-shape_layer = shape_dataset.GetLayer()
+def print_attributes(shapefile):
+    shape_dataset = ogr.Open(shapefile)
+    shape_layer = shape_dataset.GetLayer()
 
-# extract the names of all attributes (fieldnames) in the shape file
-attributes = []
-ldefn = shape_layer.GetLayerDefn()
-for n in range(ldefn.GetFieldCount()):
-    fdefn = ldefn.GetFieldDefn(n)
-    attributes.append(fdefn.name)
-    
-# print the attributes
-print('Available attributes in the shape file are: {}'.format(attributes))
+    # extract the names of all attributes (fieldnames) in the shape file
+    attribute_names = []
+    ldefn = shape_layer.GetLayerDefn()
+    for n in range(ldefn.GetFieldCount()):
+        fdefn = ldefn.GetFieldDefn(n)
+        attribute_names.append(fdefn.name)   
+    # print the attributes
+    print('Available attributes in the shape file are: {}'.format(attribute_names))
+    return attribute_names
 
+attribute_names = print_attributes(training)
 
 # In[4]: #-------------------PREPARING RESULTS TEXT FILE-------------------#
 #Overwrite if there is an existing file
@@ -174,195 +186,212 @@ print('-------------------------------------------------', file=open(results_txt
 
 
 # In[5]: #-------------------IMAGE DATA EXTRACTION-------------------#
+def extract_image_data(image_path):
+    print('Extracting image data from: {}'.format(image_path))
+    img_tile = gdal.Open(image_path, gdal.GA_ReadOnly)
 
-print('Extracting image data from: {}'.format(train_tile_path))
-train_tile = gdal.Open(train_tile_path, gdal.GA_ReadOnly)
-
-train_tile_array = np.zeros((train_tile.RasterYSize, train_tile.RasterXSize, train_tile.RasterCount),
-               gdal_array.GDALTypeCodeToNumericTypeCode(train_tile.GetRasterBand(1).DataType))
-for b in range(train_tile_array.shape[2]):
-    train_tile_array[:, :, b] = train_tile.GetRasterBand(b + 1).ReadAsArray()
-
-
-row = train_tile.RasterYSize
-col = train_tile.RasterXSize
-band_number = train_tile.RasterCount
-
-print('Image extent: {} x {} (row x col)'.format(row, col))
-print('Number of Bands: {}'.format(band_number))
+    img_tile_array = np.zeros((img_tile.RasterYSize, img_tile.RasterXSize, img_tile.RasterCount),
+                gdal_array.GDALTypeCodeToNumericTypeCode(img_tile.GetRasterBand(1).DataType))
+    for b in range(img_tile_array.shape[2]):
+        img_tile_array[:, :, b] = img_tile.GetRasterBand(b + 1).ReadAsArray()
 
 
-print('Image extent: {} x {} (row x col)'.format(row, col), file=open(results_txt, "a"))
-print('Number of Bands: {}'.format(band_number), file=open(results_txt, "a"))
-print('---------------------------------------', file=open(results_txt, "a"))
-print('TRAINING', file=open(results_txt, "a"))
-print('Number of Trees: {}'.format(est), file=open(results_txt, "a"))
+    row = img_tile.RasterYSize
+    col = img_tile.RasterXSize
+    band_number = img_tile.RasterCount
 
+    print('Image extent: {} x {} (row x col)'.format(row, col))
+    print('Number of Bands: {}'.format(band_number))
+
+
+    print('Image extent: {} x {} (row x col)'.format(row, col), file=open(results_txt, "a"))
+    print('Number of Bands: {}'.format(band_number), file=open(results_txt, "a"))
+    print('---------------------------------------', file=open(results_txt, "a"))
+    print('TRAINING', file=open(results_txt, "a"))
+    print('Number of Trees: {}'.format(est), file=open(results_txt, "a"))
+    return img_tile, img_tile_array
+
+train_tile, train_tile_array = extract_image_data(train_tile_path)
 
 # In[7]: #-------------------TRAINING DATA EXTRACTION FROM SHAPEFILE-------------------#
 
-#model_dataset = gdal.Open(model_raster_fname)
-shape_dataset = ogr.Open(training)
-shape_layer = shape_dataset.GetLayer()
+def extract_training_data(shapefile, raster, raster_3Darray):
+    shape_dataset = ogr.Open(shapefile)
+    shape_layer = shape_dataset.GetLayer()
 
-mem_drv = gdal.GetDriverByName('MEM')
-mem_raster = mem_drv.Create('',train_tile.RasterXSize,train_tile.RasterYSize,1,gdal.GDT_UInt16)
-mem_raster.SetProjection(train_tile.GetProjection())
-mem_raster.SetGeoTransform(train_tile.GetGeoTransform())
-mem_band = mem_raster.GetRasterBand(1)
-mem_band.Fill(0)
-mem_band.SetNoDataValue(0)
+    mem_drv = gdal.GetDriverByName('MEM')
+    mem_raster = mem_drv.Create('',raster.RasterXSize,raster.RasterYSize,1,gdal.GDT_UInt16)
+    mem_raster.SetProjection(raster.GetProjection())
+    mem_raster.SetGeoTransform(raster.GetGeoTransform())
+    mem_band = mem_raster.GetRasterBand(1)
+    mem_band.Fill(0)
+    mem_band.SetNoDataValue(0)
 
-att_ = 'ATTRIBUTE='+attribute
-err = gdal.RasterizeLayer(mem_raster, [1], shape_layer, None, None, [1],  [att_,"ALL_TOUCHED=TRUE"])
-assert err == gdal.CE_None
+    att_ = 'ATTRIBUTE='+attribute
+    err = gdal.RasterizeLayer(mem_raster, [1], shape_layer, None, None, [1],  [att_,"ALL_TOUCHED=TRUE"])
+    assert err == gdal.CE_None
 
-roi = mem_raster.ReadAsArray()
+    roi = mem_raster.ReadAsArray()
 
-# Find how many non-zero entries we have -- i.e. how many training data samples?
-# Number of training pixels:
-n_samples = (roi > 0).sum()
-print('{n} training samples'.format(n=n_samples))
-print('{n} training samples'.format(n=n_samples), file=open(results_txt, "a"))
+    # Find how many non-zero entries we have -- i.e. how many training data samples?
+    # Number of training pixels:
+    n_samples = (roi > 0).sum()
+    print('{n} training samples'.format(n=n_samples))
+    print('{n} training samples'.format(n=n_samples), file=open(results_txt, "a"))
 
-# What are our classification labels?
-labels = np.unique(roi[roi > 0])
-print('training data include {n} classes: {classes}'.format(n=labels.size, classes=labels))
-print('training data include {n} classes: {classes}'.format(n=labels.size, classes=labels), file=open(results_txt, "a"))
+    # What are our classification labels?
+    labels = np.unique(roi[roi > 0])
+    print('training data include {n} classes: {classes}'.format(n=labels.size, classes=labels))
+    print('training data include {n} classes: {classes}'.format(n=labels.size, classes=labels), file=open(results_txt, "a"))
 
-# Subset the image dataset with the training image = X
-# Mask the classes on the training dataset = y
-# These will have n_samples rows
-X = train_tile_array[roi > 0, :]
-y = roi[roi > 0]
+    # Subset the image dataset with the training image = X
+    # Mask the classes on the training dataset = y
+    # These will have n_samples rows
+    X = raster_3Darray[roi > 0, :]
+    y = roi[roi > 0]
 
-print('Our X matrix is sized: {sz}'.format(sz=X.shape))
-print('Our y array is sized: {sz}'.format(sz=y.shape))
+    print('Our X matrix is sized: {sz}'.format(sz=X.shape))
+    print('Our y array is sized: {sz}'.format(sz=y.shape))
+    return X, y, labels, att_
 
+X, y, labels, att_ = extract_training_data(training, train_tile, train_tile_array)
 
+# In[9]: #--------------------Train Random Forest & RUN MODEL DIAGNOSTICS-----------------#
+def train_RF(X, y, est, n_cores, verbose):
+    if verbose:
+        # verbose = 2 -> prints out every tree progression
+        verbose = 2
+    else:
+        verbose = 0
+    
+    rf = RandomForestClassifier(n_estimators=est, oob_score=True, verbose=verbose, n_jobs=n_cores)
+    X = np.nan_to_num(X)
+    rf2 = rf.fit(X, y)
 
+    print('--------------------------------', file=open(results_txt, "a"))
+    print('TRAINING and RF Model Diagnostics:', file=open(results_txt, "a"))
+    print('OOB prediction of accuracy is: {oob}%'.format(oob=rf.oob_score_ * 100))
+    print('OOB prediction of accuracy is: {oob}%'.format(oob=rf.oob_score_ * 100), file=open(results_txt, "a"))
 
-# In[9]: #--------------------Train Random Forest-----------------#
+    # Show band importance:
+    bands = range(1,train_tile.RasterCount+1)
 
-rf = RandomForestClassifier(n_estimators=est, oob_score=True, verbose=0, n_jobs=n_cores)
+    for b, imp in zip(bands, rf2.feature_importances_):
+        print('Band {b} importance: {imp}'.format(b=b, imp=imp))
+        print('Band {b} importance: {imp}'.format(b=b, imp=imp), file=open(results_txt, "a"))
 
-# verbose = 2 -> prints out every tree progression
-# rf = RandomForestClassifier(n_estimators=est, oob_score=True, verbose=2, n_jobs=n_cores)
-X = np.nan_to_num(X)
-rf2 = rf.fit(X, y)
+    # Set up confusion matrix for cross-tabulation
+    try:
+        df = pd.DataFrame()
+        df['truth'] = y
+        df['predict'] = rf.predict(X)
 
+    # Exception Handling because of possible Memory Error
+    except MemoryError:
+        print('Crosstab not available ')
 
-
-# In[10]: # -------------------RF MODEL DIAGNOSTICS-------------------#
-
-print('--------------------------------', file=open(results_txt, "a"))
-print('TRAINING and RF Model Diagnostics:', file=open(results_txt, "a"))
-print('OOB prediction of accuracy is: {oob}%'.format(oob=rf.oob_score_ * 100))
-print('OOB prediction of accuracy is: {oob}%'.format(oob=rf.oob_score_ * 100), file=open(results_txt, "a"))
-
-# Show band importance:
-bands = range(1,train_tile.RasterCount+1)
-
-for b, imp in zip(bands, rf2.feature_importances_):
-    print('Band {b} importance: {imp}'.format(b=b, imp=imp))
-    print('Band {b} importance: {imp}'.format(b=b, imp=imp), file=open(results_txt, "a"))
-
-# Set up confusion matrix for cross-tabulation
-try:
-    df = pd.DataFrame()
-    df['truth'] = y
-    df['predict'] = rf.predict(X)
-
-# Exception Handling because of possible Memory Error
-except MemoryError:
-    print('Crosstab not available ')
-
-else:
-    # Cross-tabulate predictions
-    print(pd.crosstab(df['truth'], df['predict'], margins=True))
-    print(pd.crosstab(df['truth'], df['predict'], margins=True), file=open(results_txt, "a"))
-
+    else:
+        # Cross-tabulate predictions
+        print(pd.crosstab(df['truth'], df['predict'], margins=True))
+        print(pd.crosstab(df['truth'], df['predict'], margins=True), file=open(results_txt, "a"))
 
 
-cm = confusion_matrix(y,rf.predict(X))
-plt.figure(figsize=(10,7))
-sn.heatmap(cm, annot=True, fmt='g')
-plt.xlabel('classes - predicted')
-plt.ylabel('classes - truth')
+
+    cm = confusion_matrix(y,rf.predict(X))
+    plt.figure(figsize=(10,7))
+    sn.heatmap(cm, annot=True, fmt='g')
+    plt.xlabel('classes - predicted')
+    plt.ylabel('classes - truth')
+    return rf, rf2
+
+rf, rf2 = train_RF(X, y, est, n_cores, verbose)
+
 # In[11]:#-------------------PREDICTION ON TRAINING IMAGE-------------------#
 
-# Flatten multiple raster bands (3D array) into 2D array for classification
-new_shape = (train_tile_array.shape[0] * train_tile_array.shape[1], train_tile_array.shape[2]) # New shape is a length of rows x number of bands
-train_tile_2Darray = train_tile_array[:, :, :int(train_tile_array.shape[2])].reshape(new_shape)  # reshape the image array to [n_samples, n_features]
+def flatten_raster_bands(raster_3Darray):
+    # Flatten multiple raster bands (3D array) into 2D array for classification
+    new_shape = (raster_3Darray.shape[0] * raster_3Darray.shape[1], raster_3Darray.shape[2])
+    raster_2Darray = raster_3Darray.reshape(new_shape)
+    print('Reshaped from {} to {}'.format(raster_3Darray.shape, raster_2Darray.shape))
+    return np.nan_to_num(raster_2Darray)
 
-print('Reshaped from {o} to {n}'.format(o=train_tile_array.shape, n=train_tile_2Darray.shape))
 
-train_tile_2Darray = np.nan_to_num(train_tile_2Darray) # Convert NaNs to 0.0
+
+#train_tile_2Darray = train_tile_array[:, :, :int(train_tile_array.shape[2])].reshape(new_shape)  # reshape the image array to [n_samples, n_features]
+
+train_tile_2Darray = flatten_raster_bands(train_tile_array) # Convert NaNs to 0.0
 
 # Predict for each pixel on training tile. First prediction will be tried on the entire image and the dataset will be sliced if there is not enough RAM
-try:
-    class_prediction = rf.predict(train_tile_2Darray) # Predict the classification for each pixel using the trained model
-# Check if there is enough RAM to process the entire image, if not, slice the image into smaller pieces and process each piece
-except MemoryError:
-    slices = int(round((len(train_tile_2Darray)/2)))
-    print("Slices: ", slices)
-    test = True
-    
-    while test == True:
-        try:
-            class_preds = list()
-            
-            temp = rf.predict(train_tile_2Darray[0:slices+1,:])
-            class_preds.append(temp)
-            
-            for i in range(slices,len(train_tile_2Darray),slices):
-                if (i // slices) % 10 == 0:
-                    print(f'{(i * 100) / len(train_tile_2Darray):.2f}% completed, Processing slice {i}')
-                temp = rf.predict(train_tile_2Darray[i+1:i+(slices+1),:])                
+def predict_classification(rf, raster_2Darray):
+    try:
+        class_prediction = rf.predict(raster_2Darray) # Predict the classification for each pixel using the trained model
+    # Check if there is enough RAM to process the entire image, if not, slice the image into smaller pieces and process each piece
+    except MemoryError:
+        slices = int(round((len(raster_2Darray)/2)))
+        print("Slices: ", slices)
+        test = True
+        
+        while test == True:
+            try:
+                class_preds = list()
+                
+                temp = rf.predict(raster_2Darray[0:slices+1,:])
                 class_preds.append(temp)
-            
-        except MemoryError as error:
-            slices = round(slices/2)
-            print('Not enought RAM, new slices = {}'.format(slices))
-            
-        else:
-            test = False
-            
-#Concatenate the list of sliced arrays into a single array
-try:
-    class_prediction = np.concatenate(class_preds,axis = 0)
-except NameError:
-    print('No slicing was necessary!')
+                
+                for i in range(slices,len(raster_2Darray),slices):
+                    if (i // slices) % 10 == 0:
+                        print(f'{(i * 100) / len(raster_2Darray):.2f}% completed, Processing slice {i}')
+                    temp = rf.predict(raster_2Darray[i+1:i+(slices+1),:])                
+                    class_preds.append(temp)
+                
+            except MemoryError as error:
+                slices = round(slices/2)
+                print('Not enought RAM, new slices = {}'.format(slices))
+                
+            else:
+                test = False
+                
+    #Concatenate the list of sliced arrays into a single array
+    try:
+        class_prediction = np.concatenate(class_preds,axis = 0)
+    except NameError:
+        print('No slicing was necessary!')
 
-# Reshape our classification map back into a 2D matrix so we can visualize it`` 
-class_prediction = class_prediction.reshape(train_tile_array[:, :, 0].shape)
-print('Reshaped back to {}'.format(class_prediction.shape))
+    # Reshape our classification map back into a 2D matrix so we can visualize it`` 
+    class_prediction = class_prediction.reshape(train_tile_array[:, :, 0].shape)
+    print('Reshaped back to {}'.format(class_prediction.shape))
+    return class_prediction
 
+class_prediction = predict_classification(rf, train_tile_2Darray)
 
 #-------------------MASKING-------------------#
-mask = np.copy(train_tile_array[:,:,0])
-mask[mask > 0.0] = 1.0 # all actual pixels have a value of 1.0
+def reshape_and_mask_prediction(class_prediction, raster_3Darray):
+    class_prediction = class_prediction.reshape(raster_3Darray[:, :, 0].shape)
+    mask = np.copy(raster_3Darray[:,:,0])
+    mask[mask > 0.0] = 1.0
+    masked_prediction = class_prediction.astype(np.float16) * mask
+    return masked_prediction
 
-# Apply mask
-class_prediction.astype(np.float16)
-class_prediction_ = class_prediction*mask
-
+masked_prediction = reshape_and_mask_prediction(class_prediction, train_tile_array)
 
 #--------------SAVE CLASSIFICATION IMAGE-----------------#
-cols = train_tile_array.shape[1]
-rows = train_tile_array.shape[0]
+def save_classification_image(classification_image, raster, raster_3Darray, masked_prediction):
+    cols = raster_3Darray.shape[1]
+    rows = raster_3Darray.shape[0]
 
-class_prediction_.astype(np.float16)
-driver = gdal.GetDriverByName("gtiff")
-outdata = driver.Create(classification_image, cols, rows, 1, gdal.GDT_UInt16) # Create empty image with input raster dimensions
-outdata.SetGeoTransform(train_tile.GetGeoTransform())##sets same geotransform as input
-outdata.SetProjection(train_tile.GetProjection())##sets same projection as input
-outdata.GetRasterBand(1).WriteArray(class_prediction_)
-outdata.FlushCache() ##saves to disk
-print('Image saved to: {}'.format(classification_image))
+    masked_prediction.astype(np.float16)
+    driver = gdal.GetDriverByName("gtiff")
+    outdata = driver.Create(classification_image, cols, rows, 1, gdal.GDT_UInt16) # Create empty image with input raster dimensions
+    outdata.SetGeoTransform(raster.GetGeoTransform())##sets same geotransform as input
+    outdata.SetProjection(raster.GetProjection())##sets same projection as input
+    outdata.GetRasterBand(1).WriteArray(masked_prediction)
+    outdata.FlushCache() ##saves to disk
+    print('Image saved to: {}'.format(classification_image))
 
+save_classification_image(classification_image, train_tile, train_tile_array, masked_prediction)
 
-# In[12]: #-------------------VALIDATION AND EVALUATION-------------------#
+# In[12]: #-------------------MODEL EVALUATION-------------------#
+
 print('------------------------------------', file=open(results_txt, "a"))
 print('VALIDATION', file=open(results_txt, "a"))
 
@@ -442,6 +471,9 @@ del train_tile # close the image dataset
 #Check if there are multiple tiles to process
 if grid_ids:
     for index, (img_path, id_value) in enumerate(zip(img_path_list, id_values), start=1):
+            #train_val_grid_id is the id value of the training tile, which was already processed in model evaluation
+            if id_value == train_val_grid_id:
+                continue
             start_time = datetime.datetime.now()
             #Drop the first character of the id_value if it starts with a _
             if id_value[0] == '_':
@@ -535,6 +567,9 @@ print('Processing End: {}'.format(datetime.datetime.now()), file=open(results_tx
 if stitch:
     print('Stitching rasters')
     stitched_raster_path = os.path.join(output_folder, 'Stitched_Classified_Image.tif')
+    #Check if stitched_raster_path exists, if so, delete it
+    if os.path.exists(stitched_raster_path):
+        os.remove(stitched_raster_path)
     stitch_rasters(output_folder, stitched_raster_path)
     
 

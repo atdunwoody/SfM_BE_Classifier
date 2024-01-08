@@ -18,7 +18,7 @@ from sklearn.metrics import classification_report, accuracy_score
 
 
 
-def compute_confusion_matrix_v2(target_raster, img_RS, results_txt):
+def compute_confusion_matrix(target_raster, img_RS, results_txt):
     #Print input parameters to txt file
     print('Reference raster: {}'.format(img_RS), file=open(results_txt, "a"))
     print('Target raster: {}'.format(target_raster), file=open(results_txt, "a"))
@@ -75,4 +75,4 @@ results_out  =  os.path.join(output_folder, results_txt_file)
 if not os.path.exists(output_folder):
     os.makedirs(output_folder)
 
-print(compute_confusion_matrix_v2(target_raster, ref_raster,results_out))
+print(compute_confusion_matrix(target_raster, ref_raster,results_out))
