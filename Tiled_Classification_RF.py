@@ -44,20 +44,25 @@ from GIStools.Raster_Matching import pad_rasters_to_largest
 
 # In[1]: #-------------------User Defined Inputs-------------------#
 
-#Path to orthomosaic and DEM created in SfM processing
+#-------------------Required Inputs-------------------#
+
+#Path to orthomosaic and DEM from SfM processing
 ortho_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test\Grid_Creation_Test\Full_Ortho_Clipped_v1.tif"
 DEM_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test\Grid_Creation_Test\Full_DEM_Clipped_v1.tif"
 
 #Output folder for all generated Inputs and Results
 output_folder = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test\Grid_Creation_Test"
-grid_ids = []  # Choose grid IDs to process, or leave empty to process all grid cells
-process_training_only = True # Set to True to only process the training tile, set to False to process all grid cells
 
 # Paths to training and validation as shape files. Training and validation shapefiles should be clipped to a single grid cell
 # Training and Validation shapefiles should be labeled with a single, NON ZERO  attribute that identifies bare earth and vegetation.
 training = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Training-Validation Shapes\Archive\Training\Training.shp"  # 0 = No Data
 validation = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Training-Validation Shapes\Archive\Validation\Validation.shp"  # 0 = No Data
 attribute = 'id' # attribute name in training & validation shapefiles that labels bare earth & vegetation 
+
+#-------------------Optional Classification Parameters-------------------#
+grid_ids = []  # Choose grid IDs to process, or leave empty to process all grid cells
+process_training_only = True # Set to True to only process the training tile, set to False to process all grid cells
+
 est = 300 # define number of trees that will be used to build random forest (default = 300)
 n_cores = -1 # -1 -> all available computing cores will be used (default = -1)
 
@@ -84,7 +89,10 @@ grid_ids = preprocess_function(grid_path, ortho_path, DEM_path, grid_ids, output
 print("Grid IDs: ", grid_ids)
 # Check if train_val_grid_id is in grid_ids and remove it from grid_ids
 
-    
+#Check if grid_ids has a length of 1, if so, set Stitch to False, since there's no rasters to stitch
+if len(grid_ids) == 1:
+    stitch = False
+    print('Stitching set to False, only one grid cell to process')
 pad_rasters_to_largest(in_dir)
 
 # grid-clipped-image containing the training data
