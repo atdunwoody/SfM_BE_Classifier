@@ -387,10 +387,10 @@ def preprocess_function(shapefile_path, ortho_filepath, DEM_filepath, grid_ids, 
 
         #Step 2: Create roughness raster
         roughness_path = os.path.join(grid_output_folder, 'roughness.tif')
-        calculate_roughness(DEM_filepath, roughness_path)
+        calculate_roughness(DEM_filepath, roughness_path, verbose=verbose)
         
         # Step 3: Mask ortho and roughness rasters by shapefile
-        masked_rasters = mask_rasters_by_shapefile([ortho_filepath, roughness_path], shapefile_path, grid_output_folder, [grid_id])
+        masked_rasters = mask_rasters_by_shapefile([ortho_filepath, roughness_path], shapefile_path, grid_output_folder, [grid_id], verbose=verbose)
         masked_ortho = masked_rasters[grid_id][0]  # Assuming ortho raster is first in the list
 
         # Step 4: Split bands of the ortho raster
@@ -399,7 +399,7 @@ def preprocess_function(shapefile_path, ortho_filepath, DEM_filepath, grid_ids, 
         if verbose:
             print("Proccessing RGB Bands...")
         # Step 5: Process RGB bands
-        processed_rgb = processRGB(rgb_bands)
+        processed_rgb = processRGB(rgb_bands, verbose=verbose)
         # Step 6: Append processed RGB to list
         rgb_bands.extend(processed_rgb)
         rasters_to_stack = rgb_bands
@@ -412,7 +412,7 @@ def preprocess_function(shapefile_path, ortho_filepath, DEM_filepath, grid_ids, 
 
         # Step 8: Match DEM resolution
         matched_roughness_path = os.path.join(grid_output_folder, 'matched_roughness.tif')
-        match_dem_resolution(clipped_roughness, masked_ortho, matched_roughness_path)
+        match_dem_resolution(clipped_roughness, masked_ortho, matched_roughness_path, verbose=verbose)
         matched_roughness_path = [matched_roughness_path]
         # Step 9: Append roughness to raster list
         matched_roughness_path.extend(rasters_to_stack)
