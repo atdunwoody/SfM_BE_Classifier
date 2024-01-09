@@ -55,8 +55,8 @@ output_folder = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filteri
 
 # Paths to training and validation as shape files. Training and validation shapefiles should be clipped to a single grid cell
 # Training and Validation shapefiles should be labeled with a single, NON ZERO  attribute that identifies bare earth and vegetation.
-training = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Training-Validation Shapes\Archive\Training\Training.shp"  # 0 = No Data
-validation = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Training-Validation Shapes\Archive\Validation\Validation.shp"  # 0 = No Data
+training_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Training-Validation Shapes\Archive\Training\Training.shp"  # 0 = No Data
+validation_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Training-Validation Shapes\Archive\Validation\Validation.shp"  # 0 = No Data
 attribute = 'id' # attribute name in training & validation shapefiles that labels bare earth & vegetation 
 
 #-------------------Optional Classification Parameters-------------------#
@@ -83,7 +83,7 @@ in_dir = os.path.join(output_folder, 'Tiled_Inputs')
 
 #Create grid cells to process large rasters in chunks. 
 #Each grid cell is the size of the extent training and validation shapefiles
-train_val_grid_id, grid_path = create_grid([training,validation], DEM_path, in_dir)
+train_val_grid_id, grid_path = create_grid([training_path,validation_path], DEM_path, in_dir)
 #This will cause preprocess function to only process the training tile
 if process_training_only:
     grid_ids.append(train_val_grid_id)
@@ -166,7 +166,7 @@ def print_attributes(shapefile):
     print('Available attributes in the shape file are: {}'.format(attribute_names))
     return attribute_names
 
-attribute_names = print_attributes(training)
+attribute_names = print_attributes(training_path)
 
 # In[4]: #-------------------PREPARING RESULTS TEXT FILE-------------------#
 #Overwrite if there is an existing file
@@ -177,8 +177,8 @@ print('Processing Start: {}'.format(datetime.datetime.now()), file=open(results_
 print('-------------------------------------------------', file=open(results_txt, "a"))
 print('PATHS:', file=open(results_txt, "a"))
 print('Training Tile: {}'.format(train_tile_path), file=open(results_txt, "a"))
-print('Training shape: {}'.format(training) , file=open(results_txt, "a"))
-print('Vaildation shape: {}'.format(validation) , file=open(results_txt, "a"))
+print('Training shape: {}'.format(training_path) , file=open(results_txt, "a"))
+print('Vaildation shape: {}'.format(validation_path) , file=open(results_txt, "a"))
 print('      choosen attribute: {}'.format(attribute) , file=open(results_txt, "a"))
 print('Classified Tiles: {}'.format(img_path_list) , file=open(results_txt, "a"))
 print('Report text file: {}'.format(results_txt) , file=open(results_txt, "a"))
@@ -215,46 +215,52 @@ train_tile, train_tile_array = extract_image_data(train_tile_path)
 
 # In[7]: #-------------------TRAINING DATA EXTRACTION FROM SHAPEFILE-------------------#
 
-def extract_training_data(shapefile, raster, raster_3Darray):
-    shape_dataset = ogr.Open(shapefile)
-    shape_layer = shape_dataset.GetLayer()
+def extract_shapefile_data(shapefile, raster, raster_3Darray, results_txt, attribute, header):
+    # Subfunction to extract data from a shapefile
+    def extract_from_shapefile(shapefile, raster, raster_3Darray):
+        shape_dataset = ogr.Open(shapefile)
+        shape_layer = shape_dataset.GetLayer()
 
-    mem_drv = gdal.GetDriverByName('MEM')
-    mem_raster = mem_drv.Create('',raster.RasterXSize,raster.RasterYSize,1,gdal.GDT_UInt16)
-    mem_raster.SetProjection(raster.GetProjection())
-    mem_raster.SetGeoTransform(raster.GetGeoTransform())
-    mem_band = mem_raster.GetRasterBand(1)
-    mem_band.Fill(0)
-    mem_band.SetNoDataValue(0)
+        mem_drv = gdal.GetDriverByName('MEM')
+        mem_raster = mem_drv.Create('', raster.RasterXSize, raster.RasterYSize, 1, gdal.GDT_UInt16)
+        mem_raster.SetProjection(raster.GetProjection())
+        mem_raster.SetGeoTransform(raster.GetGeoTransform())
+        mem_band = mem_raster.GetRasterBand(1)
+        mem_band.Fill(0)
+        mem_band.SetNoDataValue(0)
 
-    att_ = 'ATTRIBUTE='+attribute
-    err = gdal.RasterizeLayer(mem_raster, [1], shape_layer, None, None, [1],  [att_,"ALL_TOUCHED=TRUE"])
-    assert err == gdal.CE_None
+        att_ = 'ATTRIBUTE=' + attribute
+        err = gdal.RasterizeLayer(mem_raster, [1], shape_layer, None, None, [1], [att_, "ALL_TOUCHED=TRUE"])
+        assert err == gdal.CE_None
 
-    roi = mem_raster.ReadAsArray()
+        roi = mem_raster.ReadAsArray()
+        X = raster_3Darray[roi > 0, :]
+        y = roi[roi > 0]
+        n_samples = (roi > 0).sum()
+        labels = np.unique(roi[roi > 0])
 
-    # Find how many non-zero entries we have -- i.e. how many training data samples?
-    # Number of training pixels:
-    n_samples = (roi > 0).sum()
-    print('{n} training samples'.format(n=n_samples))
-    print('{n} training samples'.format(n=n_samples), file=open(results_txt, "a"))
+        return X, y, labels, n_samples, att_
 
-    # What are our classification labels?
-    labels = np.unique(roi[roi > 0])
-    print('training data include {n} classes: {classes}'.format(n=labels.size, classes=labels))
-    print('training data include {n} classes: {classes}'.format(n=labels.size, classes=labels), file=open(results_txt, "a"))
+    # Subfunction to print information
+    def print_info(n_samples, labels, X, y, header):
+        with open(results_txt, "a") as file:
+            print('------------------------------------', file=file)
+            print(header, file=file)
+            print('{n} samples'.format(n=n_samples), file=file)
+            print('Data include {n} classes: {classes}'.format(n=labels.size, classes=labels), file=file)
+            print('X matrix is sized: {sz}'.format(sz=X.shape), file=file)
+            print('y array is sized: {sz}'.format(sz=y.shape), file=file)
 
-    # Subset the image dataset with the training image = X
-    # Mask the classes on the training dataset = y
-    # These will have n_samples rows
-    X = raster_3Darray[roi > 0, :]
-    y = roi[roi > 0]
+    # Extract data
+    X, y, labels, n_samples, att_ = extract_from_shapefile(shapefile, raster, raster_3Darray)
+    print_info(n_samples, labels, X, y, header)
 
-    print('Our X matrix is sized: {sz}'.format(sz=X.shape))
-    print('Our y array is sized: {sz}'.format(sz=y.shape))
     return X, y, labels, att_
 
-X, y, labels, att_ = extract_training_data(training, train_tile, train_tile_array)
+
+X_train, y_train, labels, att_ = extract_shapefile_data(training_path, train_tile, train_tile_array, results_txt, attribute, "TRAINING")
+
+
 
 # In[9]: #--------------------Train Random Forest & RUN MODEL DIAGNOSTICS-----------------#
 def train_RF(X, y, est, n_cores, verbose):
@@ -304,7 +310,7 @@ def train_RF(X, y, est, n_cores, verbose):
     plt.ylabel('classes - truth')
     return rf, rf2
 
-rf, rf2 = train_RF(X, y, est, n_cores, verbose)
+rf, rf2 = train_RF(X_train, y_train, est, n_cores, verbose)
 
 # In[11]:#-------------------PREDICTION ON TRAINING IMAGE-------------------#
 
@@ -392,11 +398,55 @@ save_classification_image(classification_image, train_tile, train_tile_array, ma
 
 # In[12]: #-------------------MODEL EVALUATION-------------------#
 
+def extract_shapefile_data(shapefile, raster, raster_3Darray, results_txt, attribute, header):
+    # Subfunction to extract data from a shapefile
+    def extract_from_shapefile(shapefile, raster, raster_3Darray):
+        shape_dataset = ogr.Open(shapefile)
+        shape_layer = shape_dataset.GetLayer()
+
+        mem_drv = gdal.GetDriverByName('MEM')
+        mem_raster = mem_drv.Create('', raster.RasterXSize, raster.RasterYSize, 1, gdal.GDT_UInt16)
+        mem_raster.SetProjection(raster.GetProjection())
+        mem_raster.SetGeoTransform(raster.GetGeoTransform())
+        mem_band = mem_raster.GetRasterBand(1)
+        mem_band.Fill(0)
+        mem_band.SetNoDataValue(0)
+
+        att_ = 'ATTRIBUTE=' + attribute
+        err = gdal.RasterizeLayer(mem_raster, [1], shape_layer, None, None, [1], [att_, "ALL_TOUCHED=TRUE"])
+        assert err == gdal.CE_None
+
+        roi = mem_raster.ReadAsArray()
+        X = raster_3Darray[roi > 0, :]
+        y = roi[roi > 0]
+        n_samples = (roi > 0).sum()
+        labels = np.unique(roi[roi > 0])
+
+        return X, y, labels, n_samples, att_
+
+    # Subfunction to print information
+    def print_info(n_samples, labels, X, y, header):
+        with open(results_txt, "a") as file:
+            print('------------------------------------', file=file)
+            print(header, file=file)
+            print('{n} samples'.format(n=n_samples), file=file)
+            print('Data include {n} classes: {classes}'.format(n=labels.size, classes=labels), file=file)
+            print('X matrix is sized: {sz}'.format(sz=X.shape), file=file)
+            print('y array is sized: {sz}'.format(sz=y.shape), file=file)
+
+    # Extract data
+    X, y, labels, n_samples, att_ = extract_from_shapefile(shapefile, raster, raster_3Darray)
+    print_info(n_samples, labels, X, y, header)
+
+    return X, y, labels, att_
+
+# X_val, y_val, labels_val = extract_shapefile_data(validation_path, train_tile, masked_prediction, results_txt, attribute, "VALIDATION")
+
 print('------------------------------------', file=open(results_txt, "a"))
 print('VALIDATION', file=open(results_txt, "a"))
 
 # laod training data from shape file
-shape_dataset_v = ogr.Open(validation) # open shape file
+shape_dataset_v = ogr.Open(validation_path) # open shape file
 shape_layer_v = shape_dataset_v.GetLayer() # get layer of shape file
 mem_drv_v = gdal.GetDriverByName('MEM')  # create memory layer 
 mem_raster_v = mem_drv_v.Create('',train_tile.RasterXSize,train_tile.RasterYSize,1,gdal.GDT_UInt16) # create memory raster
