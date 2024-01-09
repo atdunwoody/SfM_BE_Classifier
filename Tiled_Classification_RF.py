@@ -170,21 +170,23 @@ def print_attributes(shapefile):
 attribute_names = print_attributes(training_path)
 
 # In[4]: #-------------------PREPARING RESULTS TEXT FILE-------------------#
+def print_header(results_txt, train_tile_path, training_path, validation_path, img_path_list, attribute):
 #Overwrite if there is an existing file
-if os.path.exists(results_txt):
-    os.remove(results_txt)
-print('Random Forest Classification', file=open(results_txt, "a"))
-print('Processing Start: {}'.format(datetime.datetime.now()), file=open(results_txt, "a"))
-print('-------------------------------------------------', file=open(results_txt, "a"))
-print('PATHS:', file=open(results_txt, "a"))
-print('Training Tile: {}'.format(train_tile_path), file=open(results_txt, "a"))
-print('Training shape: {}'.format(training_path) , file=open(results_txt, "a"))
-print('Vaildation shape: {}'.format(validation_path) , file=open(results_txt, "a"))
-print('      choosen attribute: {}'.format(attribute) , file=open(results_txt, "a"))
-print('Classified Tiles: {}'.format(img_path_list) , file=open(results_txt, "a"))
-print('Report text file: {}'.format(results_txt) , file=open(results_txt, "a"))
-print('-------------------------------------------------', file=open(results_txt, "a"))
+    if os.path.exists(results_txt):
+        os.remove(results_txt)
+    print('Random Forest Classification', file=open(results_txt, "a"))
+    print('Processing Start: {}'.format(datetime.datetime.now()), file=open(results_txt, "a"))
+    print('-------------------------------------------------', file=open(results_txt, "a"))
+    print('PATHS:', file=open(results_txt, "a"))
+    print('Training Tile: {}'.format(train_tile_path), file=open(results_txt, "a"))
+    print('Training shape: {}'.format(training_path) , file=open(results_txt, "a"))
+    print('Vaildation shape: {}'.format(validation_path) , file=open(results_txt, "a"))
+    print('      choosen attribute: {}'.format(attribute) , file=open(results_txt, "a"))
+    print('Classified Tiles: {}'.format(img_path_list) , file=open(results_txt, "a"))
+    print('Report text file: {}'.format(results_txt) , file=open(results_txt, "a"))
+    print('-------------------------------------------------', file=open(results_txt, "a"))
 
+print_header(results_txt, train_tile_path, training_path, validation_path, img_path_list, attribute)
 
 # In[5]: #-------------------IMAGE DATA EXTRACTION-------------------#
 def extract_image_data(image_path, results_txt, log=False):
@@ -284,7 +286,6 @@ def extract_shapefile_data(shapefile, raster, raster_array, results_txt, attribu
 
 
 X_train, y_train, labels, roi = extract_shapefile_data(training_path, train_tile, train_tile_array, results_txt, attribute, "TRAINING")
-
 
 
 # In[9]: #--------------------Train Random Forest & RUN MODEL DIAGNOSTICS-----------------#
@@ -474,9 +475,7 @@ for index, (img_path, id_value) in enumerate(zip(img_path_list, id_values), star
             id_value = id_value[1:]
         
         print(f"Processing {img_path}, ID value: {id_value}")
-        current_tile, current_tile_3Darray = extract_image_data(train_tile_path, results_txt, log=True)
-        
-        train_tile_temp = gdal.Open(img_path, gdal.GA_ReadOnly)
+        current_tile, current_tile_3Darray = extract_image_data(img_path, results_txt, log=False)
         
         current_tile_2Darray = flatten_raster_bands(current_tile_3Darray)
         
