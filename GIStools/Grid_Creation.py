@@ -6,7 +6,7 @@ from osgeo import ogr
 ogr.UseExceptions()
 import math
 
-def create_grid(shapefile_paths, bounding_raster, output_folder, cell_bounds=None, bounds_multiplier=1):
+def create_grid(shapefile_paths, bounding_raster, output_folder, cell_dim=None, bounds_multiplier=1):
     
     def find_grid_id(cell_bounds, grid_shapefile):
         """
@@ -71,30 +71,38 @@ def create_grid(shapefile_paths, bounding_raster, output_folder, cell_bounds=Non
                     combined_extent = current_extent
         return combined_extent
     
-    if not cell_bounds:
-        cell_bounds = get_combined_extent(shapefile_paths)
-    # Load the raster
+    
+    cell_bounds = get_combined_extent(shapefile_paths)
+        # Load the raster
+    if not cell_dim: 
+        # Calculate 10% buffer for each dimension of the cell_bounds
+        buffer_width_x = (cell_bounds[2] - cell_bounds[0]) * 0.1
+        buffer_width_y = (cell_bounds[3] - cell_bounds[1]) * 0.1
+        
+        # Determine the grid cell size - it must be at least as large as the buffered cell_bounds
+        grid_width = (cell_bounds[2] - cell_bounds[0])*math.sqrt(bounds_multiplier) + 2 * buffer_width_x
+        grid_height = (cell_bounds[3] - cell_bounds[1])*math.sqrt(bounds_multiplier) + 2 * buffer_width_y
+    
+    else:
+        grid_width = cell_dim[0]
+        grid_height = cell_dim[1]
+        buffer_width_x = (cell_bounds[2] - cell_bounds[0]) * 0.1
+        buffer_width_y = (cell_bounds[3] - cell_bounds[1]) * 0.1
+        #check if cell_dim is larger than cell_bounds
+        if grid_width < (cell_bounds[2] - cell_bounds[0]):
+            #Raise an error that the validation shapefile is too large
+            #create a new line within the error that tells the user to use a smaller cell_dim
+            raise ValueError("Current validation data a larger extent than the combined original validation & training shapefiles the model was trained on. Reduce extent of second validation shapefile or increase cell_dim.")
     with rasterio.open(bounding_raster) as src:
         raster_bounds = src.bounds
         raster_crs = src.crs
-    
-    # Calculate 10% buffer for each dimension of the cell_bounds
-    buffer_width_x = (cell_bounds[2] - cell_bounds[0]) * 0.1
-    buffer_width_y = (cell_bounds[3] - cell_bounds[1]) * 0.1
-    
-    #square root of bounds multipler
-    
-    # Determine the grid cell size - it must be at least as large as the buffered cell_bounds
-    grid_width = (cell_bounds[2] - cell_bounds[0])*math.sqrt(bounds_multiplier) + 2 * buffer_width_x
-    grid_height = (cell_bounds[3] - cell_bounds[1])*math.sqrt(bounds_multiplier) + 2 * buffer_width_y
     
     # Starting from the lower left corner of the cell_bounds
     startx = cell_bounds[0] - buffer_width_x
     starty = cell_bounds[1] - buffer_width_y
 
+    
     # Adjust startx/starty to align with the cell_bounds while ensuring coverage beyond the bounding raster
-
-
     num_cells_x = math.ceil((raster_bounds.right - startx) / grid_width)
     num_cells_y = math.ceil((raster_bounds.top - starty) / grid_height)
 
@@ -130,8 +138,9 @@ def create_grid(shapefile_paths, bounding_raster, output_folder, cell_bounds=Non
         return None, None
 
     grid_id = find_grid_id(cell_bounds, output_path)
+    cell_dim = (grid_width, grid_height)
     
-    return grid_id, output_path
+    return grid_id, output_path, cell_dim
 
 
 

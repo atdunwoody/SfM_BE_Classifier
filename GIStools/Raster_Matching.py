@@ -201,7 +201,7 @@ def call_trim(folder, output, target_raster_path):
             print('Finished processing', filename)
 
 
-def pad_rasters_to_largest(source_rasters_folder, pad_value=0):
+def pad_rasters_to_largest(source_rasters_folder, raster_dims, pad_value=0):
     """
     Pads each raster file in the source folder to match the width and height of the largest raster found.
     Pads all bands of each raster with the specified pad value.
@@ -233,8 +233,12 @@ def pad_rasters_to_largest(source_rasters_folder, pad_value=0):
             source_rasters_paths.append(file_path)
 
     # Find the largest dimensions among all rasters
-    max_width, max_height = find_largest_dimensions(source_rasters_paths)
-
+    if not raster_dims: 
+        max_width, max_height = find_largest_dimensions(source_rasters_paths)
+        raster_dims = (max_width, max_height)
+    else:
+        max_width, max_height = raster_dims
+    
     # Process each source raster
     for source_raster_path in source_rasters_paths:
         with rasterio.open(source_raster_path) as src:
@@ -262,7 +266,7 @@ def pad_rasters_to_largest(source_rasters_folder, pad_value=0):
         with rasterio.open(source_raster_path, 'w', **src_meta) as out_raster:
             out_raster.write(padded_data)
 
-
+        return raster_dims
 
          
 def main():

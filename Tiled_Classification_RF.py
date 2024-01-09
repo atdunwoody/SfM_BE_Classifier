@@ -361,7 +361,7 @@ def main():
     training_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Training-Validation Shapes\Archive\Training\Training.shp"  # 0 = No Data
     validation_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Training-Validation Shapes\Archive\Validation\Validation.shp"  # 0 = No Data
     attribute = 'id' # attribute name in training & validation shapefiles that labels bare earth & vegetation 
-
+    validation_path_2 = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Training-Validation Shapes\Archive\Validation\Validation_2.shp"  # 0 = No Data
     #-------------------Optional User Defined Classification Parameters-------------------#
     grid_ids = []  # Choose grid IDs to process, or leave empty to process all grid cells
     process_training_only = False # Set to True to only process the training tile, set to False to process all grid cells
@@ -388,7 +388,7 @@ def main():
     #-------------------Processing------------------#
         #Create grid cells to process large rasters in chunks. 
     #Each grid cell is the size of the extent training and validation shapefiles
-    train_val_grid_id, grid_path = create_grid([training_path,validation_path], DEM_path, in_dir)
+    train_val_grid_id, grid_path, cell_dim = create_grid([training_path,validation_path], DEM_path, in_dir)
     if process_training_only: #preprocess_function will now only process the training tile
         grid_ids.append(train_val_grid_id)
     
@@ -396,7 +396,7 @@ def main():
     grid_ids = preprocess_SfM_inputs(grid_path, ortho_path, DEM_path, grid_ids, in_dir) #Prepare input stacked rasters for random forest classification
     print('Grid IDs to process: {}'.format(grid_ids))
     #Ensure all rasters are the same size by padding smaller rasters with 0s. Having raster tiles of identical sizes is required for random forest classification
-    pad_rasters_to_largest(in_dir)
+    raster_dims = pad_rasters_to_largest(in_dir)
     img_path_list, id_values = find_files(in_dir) # list of all grid-clipped images to classify and associated id values
     attribute_names = print_attributes(training_path) # print the attributes in the training shapefile
     train_tile_path = os.path.join(in_dir, f'stacked_bands_tile_input_{train_val_grid_id}.tif') # grid-clipped-image containing the training data
@@ -416,6 +416,10 @@ def main():
 
     del train_tile # close the image dataset
 
+ 
+    # Extract validation data from shapefile
+    X_v, y_v, labels_v, roi_v = extract_shapefile_data(validation_path_2, train_tile, class_prediction, results_txt, attribute, "VALIDATION")
+    
     #-------------------PREDICTION ON MULTIPLE TILES-------------------#
     #Check if there are multiple tiles to process
     for index, (img_path, id_value) in enumerate(zip(img_path_list, id_values), start=1):
@@ -459,6 +463,29 @@ def main():
             os.remove(stitched_raster_path)
         stitch_rasters(output_folder, stitched_raster_path)  
 
+    #------------------SECOND VALIDATION FILE------------------#
+    # Evaluate separate set of validation data. First stitch input rasters into a single image
+    second_validation = os.path.join(output_folder, 'Validation_2')
+
+    #Create validation tile from stitched inputs by extracting the same extent as the training tile using create grid
+    validation_grid_id, validation_grid_path, cell_dim = create_grid([validation_path_2], stitched_raster_path, second_validation, cell_dime=cell_dim)
+    validation_tile_path = os.path.join(second_validation, f'stacked_bands_tile_input_{validation_grid_id}.tif')
+    #run preprocess function on validation tile
+    preprocess_SfM_inputs(validation_grid_path, ortho_path, DEM_path, [validation_grid_id], second_validation)
+    pad_rasters_to_largest(second_validation, raster_dims)
+    validation_tile, validation_tile_3Darray = extract_image_data(validation_tile_path, results_txt, est, log=True)
+    # Run prediction on validation tile
+    validation_tile_2Darray = flatten_raster_bands(validation_tile_3Darray)
+    validation_class_prediction = predict_classification(rf, validation_tile_2Darray, validation_tile_3Darray)
+    validation_masked_prediction = reshape_and_mask_prediction(validation_class_prediction, validation_tile_3Darray)
+    validation_image = os.path.join(second_validation, f"Validation_Image.tif")
+    save_classification_image(validation_image, validation_tile, validation_tile_3Darray, validation_masked_prediction)
+    # Extract validation data from shapefile
+    X_v, y_v, labels_v, roi_v = extract_shapefile_data(validation_path_2, validation_tile, validation_class_prediction, results_txt, attribute, "VALIDATION")
+    model_evaluation(X_v, y_v, labels_v, roi_v, validation_class_prediction, results_txt) # evaluate the model using the validation data
+    
+    
+    
 if __name__ == '__main__':
     main()
     
