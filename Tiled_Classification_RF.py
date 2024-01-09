@@ -42,7 +42,7 @@ from GIStools.Stitch_Rasters import stitch_rasters
 from GIStools.Grid_Creation import create_grid
 from GIStools.Raster_Matching import pad_rasters_to_largest
 
-# In[1]: #-------------------User Defined Inputs-------------------#
+#-------------------User Defined Inputs-------------------#
 
 #-------------------Required Inputs-------------------#
 
@@ -66,58 +66,7 @@ process_training_only = False # Set to True to only process the training tile, s
 est = 300 # define number of trees that will be used to build random forest (default = 300)
 n_cores = -1 # -1 -> all available computing cores will be used (default = -1)
 verbose=True # Set to True to print out each tree progression, set to False to not print out each tree progression (default = True)
-
-#Sieveing parameters: Removing small areas of potential misclassified pixels
-sieve_size = 36 # Size of sieve kernel will depend on cell size, (default = 36 set for 1.77cm cell size)
-eight_connected = True # Set to True to remove 8-connected pixels, set to False to remove 4-connected pixels (default = True)
-
 stitch = True # Set to True to stitch all classified tiles into a single image, set to False to keep classified tiles in separate rasters (default = True)
-
-# In[2]: #--------------------Preprocessing-----------------------------#
-#Create output folder if it doesn't exist
-if not os.path.exists(output_folder):
-    os.makedirs(output_folder)
-
-#List of grid-clipped images to classify and associated id values
-in_dir = os.path.join(output_folder, 'Tiled_Inputs')
-
-#Create grid cells to process large rasters in chunks. 
-#Each grid cell is the size of the extent training and validation shapefiles
-train_val_grid_id, grid_path = create_grid([training_path,validation_path], DEM_path, in_dir)
-#This will cause preprocess function to only process the training tile
-if process_training_only:
-    grid_ids.append(train_val_grid_id)
-#Prepare input stacked rasters for random forest classification
-#Bands output from preprocess function: Roughness, R, G, B, Saturation, Excessive Green Index
-grid_ids = preprocess_function(grid_path, ortho_path, DEM_path, grid_ids, output_folder)
-print("Grid IDs: ", grid_ids)
-
-
-#Ensure all rasters are the same size by padding smaller rasters with 0s
-#Having raster tiles of identical sizes is required for random forest classification
-pad_rasters_to_largest(in_dir)
-
-# grid-clipped-image containing the training data
-train_tile_path = os.path.join(in_dir, f'stacked_bands_tile_input_{train_val_grid_id}.tif')
-print('Training Image: {}'.format(train_tile_path))
-
-#output folder for list of img_path_list grid-clipped classified images
-classification_image = os.path.join(output_folder, 'Classified_Training_Image.tif')
-
-
-
-# directory, where the classification image should be saved:
-output_folder = os.path.join(output_folder, 'Results')
-if not os.path.exists(output_folder):
-    os.makedirs(output_folder)
-# directory, where the all meta results should be saved:
-results_txt = os.path.join(output_folder, 'Results_Summary.txt')
-
-#Check if grid_ids has a length of 1, if so, set Stitch to False, since there's no rasters to stitch
-if len(grid_ids) == 1:
-    stitch = False
-    print('Stitching set to False, only one grid cell to process')
-
 
   
 def find_files(directory, file_name=None):
@@ -145,14 +94,7 @@ def find_files(directory, file_name=None):
 
     return found_files, suffix_list
 
-img_path_list, id_values = find_files(in_dir)
-
-
-
-
-# In[3]: #-------------------SHAPEFILE DATA EXTRACTION-------------------#
-
-#model_dataset = gdal.Open(model_raster_fname)
+#-------------------SHAPEFILE DATA EXTRACTION-------------------#
 def print_attributes(shapefile):
     shape_dataset = ogr.Open(shapefile)
     shape_layer = shape_dataset.GetLayer()
@@ -166,10 +108,8 @@ def print_attributes(shapefile):
     # print the attributes
     print('Available attributes in the shape file are: {}'.format(attribute_names))
     return attribute_names
+ #-------------------PREPARING RESULTS TEXT FILE-------------------#
 
-attribute_names = print_attributes(training_path)
-
-# In[4]: #-------------------PREPARING RESULTS TEXT FILE-------------------#
 def print_header(results_txt, train_tile_path, training_path, validation_path, img_path_list, attribute):
 #Overwrite if there is an existing file
     if os.path.exists(results_txt):
@@ -186,9 +126,7 @@ def print_header(results_txt, train_tile_path, training_path, validation_path, i
     print('Report text file: {}'.format(results_txt) , file=open(results_txt, "a"))
     print('-------------------------------------------------', file=open(results_txt, "a"))
 
-print_header(results_txt, train_tile_path, training_path, validation_path, img_path_list, attribute)
-
-# In[5]: #-------------------IMAGE DATA EXTRACTION-------------------#
+#-------------------IMAGE DATA EXTRACTION-------------------#
 def extract_image_data(image_path, results_txt, log=False):
     print('Extracting image data from: {}'.format(image_path))
     img_tile = gdal.Open(image_path, gdal.GA_ReadOnly)
@@ -220,9 +158,7 @@ def extract_image_data(image_path, results_txt, log=False):
         print('Number of Trees: {}'.format(est), file=open(results_txt, "a"))
     return img_tile, img_tile_array
 
-train_tile, train_tile_array = extract_image_data(train_tile_path, results_txt, log=True)
-
-# In[7]: #-------------------TRAINING DATA EXTRACTION FROM SHAPEFILE-------------------#
+#-------------------TRAINING DATA EXTRACTION FROM SHAPEFILE-------------------#
 
 def extract_shapefile_data(shapefile, raster, raster_array, results_txt, attribute, header):
 
@@ -284,11 +220,7 @@ def extract_shapefile_data(shapefile, raster, raster_array, results_txt, attribu
 
     return X, y, labels, roi
 
-
-X_train, y_train, labels, roi = extract_shapefile_data(training_path, train_tile, train_tile_array, results_txt, attribute, "TRAINING")
-
-
-# In[9]: #--------------------Train Random Forest & RUN MODEL DIAGNOSTICS-----------------#
+#--------------------Train Random Forest & RUN MODEL DIAGNOSTICS-----------------#
 def train_RF(X, y, est, n_cores, verbose):
     if verbose:
         # verbose = 2 -> prints out every tree progression
@@ -336,21 +268,14 @@ def train_RF(X, y, est, n_cores, verbose):
     plt.ylabel('classes - truth')
     return rf, rf2
 
-rf, rf2 = train_RF(X_train, y_train, est, n_cores, verbose)
-
-# In[11]:#-------------------PREDICTION ON TRAINING IMAGE-------------------#
-
+#-------------------PREDICTION ON TRAINING IMAGE-------------------#
 def flatten_raster_bands(raster_3Darray):
     # Flatten multiple raster bands (3D array) into 2D array for classification
     new_shape = (raster_3Darray.shape[0] * raster_3Darray.shape[1], raster_3Darray.shape[2])
+    #train_tile_2Darray = train_tile_array[:, :, :int(train_tile_array.shape[2])].reshape(new_shape)  # reshape the image array to [n_samples, n_features]
     raster_2Darray = raster_3Darray.reshape(new_shape)
     print('Reshaped from {} to {}'.format(raster_3Darray.shape, raster_2Darray.shape))
     return np.nan_to_num(raster_2Darray)
-
-
-#train_tile_2Darray = train_tile_array[:, :, :int(train_tile_array.shape[2])].reshape(new_shape)  # reshape the image array to [n_samples, n_features]
-
-train_tile_2Darray = flatten_raster_bands(train_tile_array) # Convert NaNs to 0.0
 
 # Predict for each pixel on training tile. First prediction will be tried on the entire image and the dataset will be sliced if there is not enough RAM
 def predict_classification(rf, raster_2Darray):
@@ -393,8 +318,6 @@ def predict_classification(rf, raster_2Darray):
     print('Reshaped back to {}'.format(class_prediction.shape))
     return class_prediction
 
-class_prediction = predict_classification(rf, train_tile_2Darray)
-
 #-------------------MASKING-------------------#
 def reshape_and_mask_prediction(class_prediction, raster_3Darray):
     class_prediction = class_prediction.reshape(raster_3Darray[:, :, 0].shape)
@@ -402,10 +325,6 @@ def reshape_and_mask_prediction(class_prediction, raster_3Darray):
     mask[mask > 0.0] = 1.0
     masked_prediction = class_prediction.astype(np.float16) * mask
     return masked_prediction
-
-
-masked_prediction = reshape_and_mask_prediction(class_prediction, train_tile_array)
-
 
 #--------------SAVE CLASSIFICATION IMAGE-----------------#
 def save_classification_image(classification_image, raster, raster_3Darray, masked_prediction):
@@ -420,13 +339,6 @@ def save_classification_image(classification_image, raster, raster_3Darray, mask
     outdata.GetRasterBand(1).WriteArray(masked_prediction)
     outdata.FlushCache() ##saves to disk
     print('Image saved to: {}'.format(classification_image))
-
-save_classification_image(classification_image, train_tile, train_tile_array, masked_prediction)
-
-# In[12]: #-------------------MODEL EVALUATION-------------------#
-
-X_v, y_v, labels_v, roi_v = extract_shapefile_data(validation_path, train_tile, class_prediction, results_txt, attribute, "VALIDATION")
-
 
 def model_evaluation(X_v, y_v, roi_v, results_txt):
     # Cross-tabulate predictions 
@@ -458,54 +370,111 @@ def model_evaluation(X_v, y_v, roi_v, results_txt):
     plt.xlabel('classes - predicted')
     plt.ylabel('classes - truth')
 
-model_evaluation(X_v, y_v, roi_v, results_txt)
+   
 
-del train_tile # close the image dataset
-
-# In[13]:#-------------------PREDICTION ON MULTIPLE TILES-------------------#
-#Check if there are multiple tiles to process
-for index, (img_path, id_value) in enumerate(zip(img_path_list, id_values), start=1):
-        #train_val_grid_id is the id value of the training tile, which was already processed in model evaluation
-        #Skip the training tile if process_training_only is set to True
-        if id_value == train_val_grid_id:
-            continue
-        start_time = datetime.datetime.now()
-        #Drop the first character of the id_value if it starts with a _
-        if id_value[0] == '_':
-            id_value = id_value[1:]
-        
-        print(f"Processing {img_path}, ID value: {id_value}")
-        current_tile, current_tile_3Darray = extract_image_data(img_path, results_txt, log=False)
-        
-        current_tile_2Darray = flatten_raster_bands(current_tile_3Darray)
-        
-        # Flatten multiple raster bands (3D array) into 2D array for classification
-        current_class_prediction = predict_classification(rf, current_tile_2Darray)
-        current_masked_prediction = reshape_and_mask_prediction(current_class_prediction, current_tile_3Darray)
-        output_file = os.path.join(output_folder, f"ME_classified_masked_{id_value}.tif")
-        save_classification_image(output_file, current_tile, current_tile_3Darray, current_masked_prediction)
-        
-        
-        print(f'Tile {index} of {len(img_path_list)} saved to: {output_file}')
-
-        # Clean up
-        del current_class_prediction, current_masked_prediction, current_tile_3Darray, current_tile_2Darray    
-        outdata = None
-        #os.remove(filename)  # Delete the temporary file from extract_image_data
-        print(f"Processing time for Tile {index}: {datetime.datetime.now() - start_time}")
-
-print('Processing End: {}'.format(datetime.datetime.now()), file=open(results_txt, "a"))
-
-# In[13]: #------------------POST PROCESSING------------------#
+def main():
     
-if stitch:
-    print('Stitching rasters')
-    stitched_raster_path = os.path.join(output_folder, 'Stitched_Classified_Image.tif')
-    #Check if stitched_raster_path exists, if so, delete it
-    if os.path.exists(stitched_raster_path):
-        os.remove(stitched_raster_path)
-    stitch_rasters(output_folder, stitched_raster_path)
+    #--------------------Preprocessing-----------------------------#
+    #Create output folder if it doesn't exist
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+
+    #List of grid-clipped images to classify and associated id values
+    in_dir = os.path.join(output_folder, 'Tiled_Inputs')
+
+    #Create grid cells to process large rasters in chunks. 
+    #Each grid cell is the size of the extent training and validation shapefiles
+    train_val_grid_id, grid_path = create_grid([training_path,validation_path], DEM_path, in_dir)
+    #This will cause preprocess function to only process the training tile
+    if process_training_only:
+        grid_ids.append(train_val_grid_id)
+    #Prepare input stacked rasters for random forest classification
+    #Bands output from preprocess function: Roughness, R, G, B, Saturation, Excessive Green Index
+    grid_ids = preprocess_function(grid_path, ortho_path, DEM_path, grid_ids, output_folder)
+    print("Grid IDs: ", grid_ids)
+
+
+    #Ensure all rasters are the same size by padding smaller rasters with 0s
+    #Having raster tiles of identical sizes is required for random forest classification
+    pad_rasters_to_largest(in_dir)
+
+    # grid-clipped-image containing the training data
+    train_tile_path = os.path.join(in_dir, f'stacked_bands_tile_input_{train_val_grid_id}.tif')
+    print('Training Image: {}'.format(train_tile_path))
+
+    #output folder for list of img_path_list grid-clipped classified images
+    classification_image = os.path.join(output_folder, 'Classified_Training_Image.tif')
+
+    # directory, where the classification image should be saved:
+    output_folder = os.path.join(output_folder, 'Results')
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+    # directory, where the all meta results should be saved:
+    results_txt = os.path.join(output_folder, 'Results_Summary.txt')
+
+    #Check if grid_ids has a length of 1, if so, set Stitch to False, since there's no rasters to stitch
+    if len(grid_ids) == 1:
+        stitch = False
+        print('Stitching set to False, only one grid cell to process')
     
+    img_path_list, id_values = find_files(in_dir)
+    attribute_names = print_attributes(training_path)
+    print_header(results_txt, train_tile_path, training_path, validation_path, img_path_list, attribute)
+    train_tile, train_tile_array = extract_image_data(train_tile_path, results_txt, log=True)
+    X_train, y_train, labels, roi = extract_shapefile_data(training_path, train_tile, train_tile_array, results_txt, attribute, "TRAINING")
+    rf, rf2 = train_RF(X_train, y_train, est, n_cores, verbose)
+    train_tile_2Darray = flatten_raster_bands(train_tile_array) # Convert NaNs to 0.0
+    class_prediction = predict_classification(rf, train_tile_2Darray)
+    masked_prediction = reshape_and_mask_prediction(class_prediction, train_tile_array)
+    save_classification_image(classification_image, train_tile, train_tile_array, masked_prediction)
+    X_v, y_v, labels_v, roi_v = extract_shapefile_data(validation_path, train_tile, class_prediction, results_txt, attribute, "VALIDATION")
+    model_evaluation(X_v, y_v, roi_v, results_txt)
 
+    del train_tile # close the image dataset
 
+    #-------------------PREDICTION ON MULTIPLE TILES-------------------#
+    #Check if there are multiple tiles to process
+    for index, (img_path, id_value) in enumerate(zip(img_path_list, id_values), start=1):
+            #train_val_grid_id is the id value of the training tile, which was already processed in model evaluation
+            #Skip the training tile if process_training_only is set to True
+            if id_value == train_val_grid_id:
+                continue
+            start_time = datetime.datetime.now()
+            #Drop the first character of the id_value if it starts with a _
+            if id_value[0] == '_':
+                id_value = id_value[1:]
+            
+            print(f"Processing {img_path}, ID value: {id_value}")
+            current_tile, current_tile_3Darray = extract_image_data(img_path, results_txt, log=False)
+            
+            current_tile_2Darray = flatten_raster_bands(current_tile_3Darray)
+            
+            # Flatten multiple raster bands (3D array) into 2D array for classification
+            current_class_prediction = predict_classification(rf, current_tile_2Darray)
+            current_masked_prediction = reshape_and_mask_prediction(current_class_prediction, current_tile_3Darray)
+            output_file = os.path.join(output_folder, f"ME_classified_masked_{id_value}.tif")
+            save_classification_image(output_file, current_tile, current_tile_3Darray, current_masked_prediction)
+            
+            
+            print(f'Tile {index} of {len(img_path_list)} saved to: {output_file}')
+
+            # Clean up
+            del current_class_prediction, current_masked_prediction, current_tile_3Darray, current_tile_2Darray    
+            outdata = None
+            #os.remove(filename)  # Delete the temporary file from extract_image_data
+            print(f"Processing time for Tile {index}: {datetime.datetime.now() - start_time}")
+
+    print('Processing End: {}'.format(datetime.datetime.now()), file=open(results_txt, "a"))
+    
+    #------------------POST PROCESSING------------------#
+    if stitch:
+        print('Stitching rasters')
+        stitched_raster_path = os.path.join(output_folder, 'Stitched_Classified_Image.tif')
+        #Check if stitched_raster_path exists, if so, delete it
+        if os.path.exists(stitched_raster_path):
+            os.remove(stitched_raster_path)
+        stitch_rasters(output_folder, stitched_raster_path)  
+
+if __name__ == '__main__':
+    main()
     
