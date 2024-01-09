@@ -42,32 +42,6 @@ from GIStools.Stitch_Rasters import stitch_rasters
 from GIStools.Grid_Creation import create_grid
 from GIStools.Raster_Matching import pad_rasters_to_largest
 
-#-------------------User Defined Inputs-------------------#
-
-#-------------------Required Inputs-------------------#
-
-#Path to orthomosaic and DEM from SfM processing
-ortho_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test\Grid_Creation_Test\Full_Ortho_Clipped_v1.tif"
-DEM_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test\Grid_Creation_Test\Full_DEM_Clipped_v1.tif"
-
-#Output folder for all generated Inputs and Results
-output_folder = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test\Grid_Creation_Test"
-
-# Paths to training and validation as shape files. Training and validation shapefiles should be clipped to a single grid cell
-# Training and Validation shapefiles should be labeled with a single, NON ZERO  attribute that identifies bare earth and vegetation.
-training_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Training-Validation Shapes\Archive\Training\Training.shp"  # 0 = No Data
-validation_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Training-Validation Shapes\Archive\Validation\Validation.shp"  # 0 = No Data
-attribute = 'id' # attribute name in training & validation shapefiles that labels bare earth & vegetation 
-
-#-------------------Optional Classification Parameters-------------------#
-grid_ids = []  # Choose grid IDs to process, or leave empty to process all grid cells
-process_training_only = False # Set to True to only process the training tile, set to False to process all grid cells
-
-est = 300 # define number of trees that will be used to build random forest (default = 300)
-n_cores = -1 # -1 -> all available computing cores will be used (default = -1)
-verbose=True # Set to True to print out each tree progression, set to False to not print out each tree progression (default = True)
-stitch = True # Set to True to stitch all classified tiles into a single image, set to False to keep classified tiles in separate rasters (default = True)
-
   
 def find_files(directory, file_name=None):
     found_files = []
@@ -373,60 +347,72 @@ def model_evaluation(X_v, y_v, roi_v, results_txt):
    
 
 def main():
-    
-    #--------------------Preprocessing-----------------------------#
+    #-------------------Required User Defined Inputs-------------------#
+
+    #Path to orthomosaic and DEM from SfM processing
+    ortho_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test\Grid_Creation_Test\Full_Ortho_Clipped_v1.tif"
+    DEM_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test\Grid_Creation_Test\Full_DEM_Clipped_v1.tif"
+
+    #Output folder for all generated Inputs and Results
+    output_folder = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test\Grid_Creation_Test"
+
+    # Paths to training and validation as shape files. Training and validation shapefiles should be clipped to a single grid cell
+    # Training and Validation shapefiles should be labeled with a single, NON ZERO  attribute that identifies bare earth and vegetation.
+    training_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Training-Validation Shapes\Archive\Training\Training.shp"  # 0 = No Data
+    validation_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Training-Validation Shapes\Archive\Validation\Validation.shp"  # 0 = No Data
+    attribute = 'id' # attribute name in training & validation shapefiles that labels bare earth & vegetation 
+
+    #-------------------Optional User Defined Classification Parameters-------------------#
+    grid_ids = []  # Choose grid IDs to process, or leave empty to process all grid cells
+    process_training_only = False # Set to True to only process the training tile, set to False to process all grid cells
+
+    est = 300 # define number of trees that will be used to build random forest (default = 300)
+    n_cores = -1 # -1 -> all available computing cores will be used (default = -1)
+    verbose=True # Set to True to print out each tree progression, set to False to not print out each tree progression (default = True)
+    stitch = True # Set to True to stitch all classified tiles into a single image, set to False to keep classified tiles in separate rasters (default = True)
+
+    #--------------------Input Preparation-----------------------------#
     #Create output folder if it doesn't exist
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
 
     #List of grid-clipped images to classify and associated id values
     in_dir = os.path.join(output_folder, 'Tiled_Inputs')
-
-    #Create grid cells to process large rasters in chunks. 
-    #Each grid cell is the size of the extent training and validation shapefiles
-    train_val_grid_id, grid_path = create_grid([training_path,validation_path], DEM_path, in_dir)
-    #This will cause preprocess function to only process the training tile
-    if process_training_only:
-        grid_ids.append(train_val_grid_id)
-    #Prepare input stacked rasters for random forest classification
-    #Bands output from preprocess function: Roughness, R, G, B, Saturation, Excessive Green Index
-    grid_ids = preprocess_function(grid_path, ortho_path, DEM_path, grid_ids, output_folder)
-    print("Grid IDs: ", grid_ids)
-
-
-    #Ensure all rasters are the same size by padding smaller rasters with 0s
-    #Having raster tiles of identical sizes is required for random forest classification
-    pad_rasters_to_largest(in_dir)
-
-    # grid-clipped-image containing the training data
-    train_tile_path = os.path.join(in_dir, f'stacked_bands_tile_input_{train_val_grid_id}.tif')
-    print('Training Image: {}'.format(train_tile_path))
-
-    #output folder for list of img_path_list grid-clipped classified images
-    classification_image = os.path.join(output_folder, 'Classified_Training_Image.tif')
-
+    
     # directory, where the classification image should be saved:
     output_folder = os.path.join(output_folder, 'Results')
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
-    # directory, where the all meta results should be saved:
-    results_txt = os.path.join(output_folder, 'Results_Summary.txt')
-
-    #Check if grid_ids has a length of 1, if so, set Stitch to False, since there's no rasters to stitch
-    if len(grid_ids) == 1:
-        stitch = False
-        print('Stitching set to False, only one grid cell to process')
     
-    img_path_list, id_values = find_files(in_dir)
-    attribute_names = print_attributes(training_path)
-    print_header(results_txt, train_tile_path, training_path, validation_path, img_path_list, attribute)
-    train_tile, train_tile_array = extract_image_data(train_tile_path, results_txt, log=True)
-    X_train, y_train, labels, roi = extract_shapefile_data(training_path, train_tile, train_tile_array, results_txt, attribute, "TRAINING")
+    #Create grid cells to process large rasters in chunks. 
+    #Each grid cell is the size of the extent training and validation shapefiles
+    train_val_grid_id, grid_path = create_grid([training_path,validation_path], DEM_path, in_dir)
+    if process_training_only: #preprocess_function will now only process the training tile
+        grid_ids.append(train_val_grid_id)
+    #Prepare input stacked rasters for random forest classification
+    #Bands output from preprocess function: Roughness, R, G, B, Saturation, Excessive Green Index
+    grid_ids = preprocess_function(grid_path, ortho_path, DEM_path, grid_ids, output_folder)
+    print('Grid IDs to process: {}'.format(grid_ids))
+    #Ensure all rasters are the same size by padding smaller rasters with 0s
+    #Having raster tiles of identical sizes is required for random forest classification
+    pad_rasters_to_largest(in_dir)
+
+    
+    #-------------------Processing------------------#
+    
+    img_path_list, id_values = find_files(in_dir) # list of all grid-clipped images to classify and associated id values
+    attribute_names = print_attributes(training_path) # print the attributes in the training shapefile
+    train_tile_path = os.path.join(in_dir, f'stacked_bands_tile_input_{train_val_grid_id}.tif') # grid-clipped-image containing the training data
+    results_txt = os.path.join(output_folder, 'Results_Summary.txt') # directory, where the all meta results will be saved
+    print_header(results_txt, train_tile_path, training_path, validation_path, img_path_list, attribute) # print the header for the results text file
+    train_tile, train_tile_3Darray = extract_image_data(train_tile_path, results_txt, log=True) # extract the training tile image data
+    # 
+    X_train, y_train, labels, roi = extract_shapefile_data(training_path, train_tile, train_tile_3Darray, results_txt, attribute, "TRAINING")
     rf, rf2 = train_RF(X_train, y_train, est, n_cores, verbose)
-    train_tile_2Darray = flatten_raster_bands(train_tile_array) # Convert NaNs to 0.0
+    train_tile_2Darray = flatten_raster_bands(train_tile_3Darray) # Convert NaNs to 0.0
     class_prediction = predict_classification(rf, train_tile_2Darray)
-    masked_prediction = reshape_and_mask_prediction(class_prediction, train_tile_array)
-    save_classification_image(classification_image, train_tile, train_tile_array, masked_prediction)
+    masked_prediction = reshape_and_mask_prediction(class_prediction, train_tile_3Darray)
+    save_classification_image(train_tile_path, train_tile, train_tile_3Darray, masked_prediction)
     X_v, y_v, labels_v, roi_v = extract_shapefile_data(validation_path, train_tile, class_prediction, results_txt, attribute, "VALIDATION")
     model_evaluation(X_v, y_v, roi_v, results_txt)
 
@@ -467,7 +453,7 @@ def main():
     print('Processing End: {}'.format(datetime.datetime.now()), file=open(results_txt, "a"))
     
     #------------------POST PROCESSING------------------#
-    if stitch:
+    if stitch and len(grid_ids) > 1:
         print('Stitching rasters')
         stitched_raster_path = os.path.join(output_folder, 'Stitched_Classified_Image.tif')
         #Check if stitched_raster_path exists, if so, delete it
