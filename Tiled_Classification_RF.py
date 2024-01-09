@@ -350,23 +350,23 @@ def main():
     #-------------------Required User Defined Inputs-------------------#
 
     #Path to orthomosaic and DEM from SfM processing
-    ortho_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test\Grid_Creation_Test\Full_Ortho_Clipped_v1.tif"
-    DEM_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test\Grid_Creation_Test\Full_DEM_Clipped_v1.tif"
+    ortho_path = r"Z:\ATD\Drone Data Processing\Metashape Exports\Bennett\ME\11-4-23\ME_Ortho_Spring2023_v1.tif"
+    DEM_path = r"Z:\ATD\Drone Data Processing\Metashape Exports\Bennett\ME\11-4-23\ME_DEM_Spring2023_3.54cm.tif"
 
     #Output folder for all generated Inputs and Results
-    output_folder = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test\Grid_Creation_Test"
+    output_folder = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Final Run"
 
     # Paths to training and validation as shape files. Training and validation shapefiles should be clipped to a single grid cell
     # Training and Validation shapefiles should be labeled with a single, NON ZERO  attribute that identifies bare earth and vegetation.
-    training_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Training-Validation Shapes\Archive\Training\Training.shp"  # 0 = No Data
-    validation_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Training-Validation Shapes\Archive\Validation\Validation.shp"  # 0 = No Data
+    training_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Training-Validation Shapes\Updated Shapes\Training.shp"  # 0 = No Data
+    validation_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Training-Validation Shapes\Updated Shapes\Validation.shp"  # 0 = No Data
     attribute = 'id' # attribute name in training & validation shapefiles that labels bare earth & vegetation 
     #-------------------Optional User Defined Classification Parameters-------------------#
     #Option to process an additional validation shapefile outside of the training grid cell. Set to None to skip second validation.
     #validation_path_2 = None
-    validation_path_2 = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test\Grid_Creation_Test\Validation_2\Validation_2.shp"
+    validation_path_2 = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Final Run\Second_Validation_Shapefile\Second_Validation.shp"
     grid_ids = []  # Choose grid IDs to process, or leave empty to process all grid cells
-    process_training_only = False # Set to True to only process the training tile, set to False to process all grid cells
+    process_training_only = True # Set to True to only process the training tile, set to False to process all grid cells
 
     est = 300 # define number of trees that will be used to build random forest (default = 300)
     n_cores = -1 # -1 -> all available computing cores will be used (default = -1)
@@ -400,10 +400,10 @@ def main():
  
     print('Training Grid ID: {}'.format(train_val_grid_id))     
     #Bands output from preprocess function: Roughness, R, G, B, Saturation, Excessive Green Index
-    grid_ids = preprocess_SfM_inputs(grid_path, ortho_path, DEM_path, grid_ids, in_dir) #Prepare input stacked rasters for random forest classification
+    grid_ids = preprocess_SfM_inputs(grid_path, ortho_path, DEM_path, grid_ids, in_dir, verbose=verbose) #Prepare input stacked rasters for random forest classification
     print('Grid IDs to process: {}'.format(grid_ids))
     #Ensure all rasters are the same size by padding smaller rasters with 0s. Having raster tiles of identical sizes is required for random forest classification
-    raster_dims = pad_rasters_to_largest(in_dir)
+    raster_dims = pad_rasters_to_largest(in_dir, verbose=verbose)
     img_path_list, id_values = find_files(in_dir) # list of all grid-clipped images to classify and associated id values
     attribute_names = print_attributes(training_path) # print the attributes in the training shapefile
     train_tile_path = os.path.join(in_dir, f'stacked_bands_tile_input_{train_val_grid_id}.tif') # grid-clipped-image containing the training data

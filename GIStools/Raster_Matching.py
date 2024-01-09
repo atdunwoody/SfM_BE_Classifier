@@ -156,7 +156,7 @@ def call_trim(folder, output, target_raster_path):
             print('Finished processing', filename)
 
 
-def pad_rasters_to_largest(source_rasters_folder, raster_dims = None, pad_value=0):
+def pad_rasters_to_largest(source_rasters_folder, raster_dims = None, verbose = False, pad_value=0):
     """
     Pads each raster file in the source folder to match the width and height of the largest raster found.
     Pads all bands of each raster with the specified pad value.
@@ -179,7 +179,9 @@ def pad_rasters_to_largest(source_rasters_folder, raster_dims = None, pad_value=
                     max_height = height
 
         return max_width, max_height
-    
+    if verbose:
+        print('Padding rasters to largest dimension')
+        
     source_rasters_paths = []
     # Create list of all .tif filepaths in the folder
     for filename in os.listdir(source_rasters_folder):

@@ -19,6 +19,18 @@ from sklearn.metrics import classification_report, accuracy_score
 
 
 def compute_confusion_matrix(target_raster, img_RS, results_txt):
+    """
+    Compute a confusion matrix and print it to a text file.
+
+    Args:
+        target_raster (str): Filepath to the rasterized validation shapefile. Should contain labels that correspond to the classified raster.
+        img_RS (str): Filepath to the classified raster
+        results_txt (str): Filepath to the text file to print the confusion matrix to. 
+
+    Returns:
+        pandas.core.frame.DataFrame: Confusion matrix as a pandas dataframe.
+    """
+    
     #Print input parameters to txt file
     print('Reference raster: {}'.format(img_RS), file=open(results_txt, "a"))
     print('Target raster: {}'.format(target_raster), file=open(results_txt, "a"))
