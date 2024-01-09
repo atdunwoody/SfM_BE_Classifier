@@ -61,7 +61,7 @@ attribute = 'id' # attribute name in training & validation shapefiles that label
 
 #-------------------Optional Classification Parameters-------------------#
 grid_ids = []  # Choose grid IDs to process, or leave empty to process all grid cells
-process_training_only = True # Set to True to only process the training tile, set to False to process all grid cells
+process_training_only = False # Set to True to only process the training tile, set to False to process all grid cells
 
 est = 300 # define number of trees that will be used to build random forest (default = 300)
 n_cores = -1 # -1 -> all available computing cores will be used (default = -1)
@@ -187,32 +187,38 @@ print('-------------------------------------------------', file=open(results_txt
 
 
 # In[5]: #-------------------IMAGE DATA EXTRACTION-------------------#
-def extract_image_data(image_path):
+def extract_image_data(image_path, results_txt, log=False):
     print('Extracting image data from: {}'.format(image_path))
     img_tile = gdal.Open(image_path, gdal.GA_ReadOnly)
 
-    img_tile_array = np.zeros((img_tile.RasterYSize, img_tile.RasterXSize, img_tile.RasterCount),
-                gdal_array.GDALTypeCodeToNumericTypeCode(img_tile.GetRasterBand(1).DataType))
+    temp_file = tempfile.NamedTemporaryFile(delete=False)
+    filename = temp_file.name
+    temp_file.close()  # Close the file so np.memmap can use it
+
+    img_tile_array = np.memmap(filename, dtype=gdal_array.GDALTypeCodeToNumericTypeCode(img_tile.GetRasterBand(1).DataType),
+                mode='w+', shape=(img_tile.RasterYSize, img_tile.RasterXSize, img_tile.RasterCount))
     for b in range(img_tile_array.shape[2]):
         img_tile_array[:, :, b] = img_tile.GetRasterBand(b + 1).ReadAsArray()
 
-
+    
     row = img_tile.RasterYSize
     col = img_tile.RasterXSize
     band_number = img_tile.RasterCount
 
-    print('Image extent: {} x {} (row x col)'.format(row, col))
-    print('Number of Bands: {}'.format(band_number))
+
+    if log:
+        print('Image extent: {} x {} (row x col)'.format(row, col))
+        print('Number of Bands: {}'.format(band_number))
 
 
-    print('Image extent: {} x {} (row x col)'.format(row, col), file=open(results_txt, "a"))
-    print('Number of Bands: {}'.format(band_number), file=open(results_txt, "a"))
-    print('---------------------------------------', file=open(results_txt, "a"))
-    print('TRAINING', file=open(results_txt, "a"))
-    print('Number of Trees: {}'.format(est), file=open(results_txt, "a"))
+        print('Image extent: {} x {} (row x col)'.format(row, col), file=open(results_txt, "a"))
+        print('Number of Bands: {}'.format(band_number), file=open(results_txt, "a"))
+        print('---------------------------------------', file=open(results_txt, "a"))
+        print('TRAINING', file=open(results_txt, "a"))
+        print('Number of Trees: {}'.format(est), file=open(results_txt, "a"))
     return img_tile, img_tile_array
 
-train_tile, train_tile_array = extract_image_data(train_tile_path)
+train_tile, train_tile_array = extract_image_data(train_tile_path, results_txt, log=True)
 
 # In[7]: #-------------------TRAINING DATA EXTRACTION FROM SHAPEFILE-------------------#
 
@@ -396,7 +402,9 @@ def reshape_and_mask_prediction(class_prediction, raster_3Darray):
     masked_prediction = class_prediction.astype(np.float16) * mask
     return masked_prediction
 
+
 masked_prediction = reshape_and_mask_prediction(class_prediction, train_tile_array)
+
 
 #--------------SAVE CLASSIFICATION IMAGE-----------------#
 def save_classification_image(classification_image, raster, raster_3Darray, masked_prediction):
@@ -455,102 +463,42 @@ del train_tile # close the image dataset
 
 # In[13]:#-------------------PREDICTION ON MULTIPLE TILES-------------------#
 #Check if there are multiple tiles to process
-if grid_ids:
-    for index, (img_path, id_value) in enumerate(zip(img_path_list, id_values), start=1):
-            #train_val_grid_id is the id value of the training tile, which was already processed in model evaluation
-            #Skip the training tile if process_training_only is set to True
-            if id_value == train_val_grid_id:
-                continue
-            start_time = datetime.datetime.now()
-            #Drop the first character of the id_value if it starts with a _
-            if id_value[0] == '_':
-                id_value = id_value[1:]
-            train_tile_temp = gdal.Open(img_path, gdal.GA_ReadOnly)
-            print(f"Processing {img_path}, ID value: {id_value}")
+for index, (img_path, id_value) in enumerate(zip(img_path_list, id_values), start=1):
+        #train_val_grid_id is the id value of the training tile, which was already processed in model evaluation
+        #Skip the training tile if process_training_only is set to True
+        if id_value == train_val_grid_id:
+            continue
+        start_time = datetime.datetime.now()
+        #Drop the first character of the id_value if it starts with a _
+        if id_value[0] == '_':
+            id_value = id_value[1:]
+        
+        print(f"Processing {img_path}, ID value: {id_value}")
+        current_tile, current_tile_3Darray = extract_image_data(train_tile_path, results_txt, log=True)
+        
+        train_tile_temp = gdal.Open(img_path, gdal.GA_ReadOnly)
+        
+        current_tile_2Darray = flatten_raster_bands(current_tile_3Darray)
+        
+        # Flatten multiple raster bands (3D array) into 2D array for classification
+        current_class_prediction = predict_classification(rf, current_tile_2Darray)
+        current_masked_prediction = reshape_and_mask_prediction(current_class_prediction, current_tile_3Darray)
+        output_file = os.path.join(output_folder, f"ME_classified_masked_{id_value}.tif")
+        save_classification_image(output_file, current_tile, current_tile_3Darray, current_masked_prediction)
+        
+        
+        print(f'Tile {index} of {len(img_path_list)} saved to: {output_file}')
 
-            # Create a temporary file for the memory-mapped array
-            temp_file = tempfile.NamedTemporaryFile(delete=False)
-            filename = temp_file.name
-            temp_file.close()  # Close the file so np.memmap can use it
-            print(f"Temporary file: {filename}")
-    
-            # Initialize a memory-mapped array to reduce memory usage
-            img_temp = np.memmap(filename, dtype=gdal_array.GDALTypeCodeToNumericTypeCode(train_tile_temp.GetRasterBand(1).DataType),
-                            mode='w+', shape=(train_tile_temp.RasterYSize, train_tile_temp.RasterXSize, train_tile_temp.RasterCount))
-            
-            print(f"Temporary array shape: {img_temp.shape}")
-            
-            # Read all bands of the image into the memory-mapped array
-            for b in range(train_tile_temp.RasterCount):
-                band = train_tile_temp.GetRasterBand(b + 1)
-                img_temp[:, :, b] = band.ReadAsArray()
-
-            # Flatten multiple raster bands (3D array) into 2D array for classification
-            train_tile_2Darray = np.nan_to_num(img_temp.reshape(-1, train_tile_temp.RasterCount))
-            print(f"Reshaped from {img_temp.shape} to {train_tile_2Darray.shape}")
-            try:
-                class_prediction = rf.predict(train_tile_2Darray)
-                print(f"Classified {img_path}")
-            except MemoryError:
-                slices = int(round(len(train_tile_2Darray) / 2))
-                test = True
-
-                while test == True:
-                    try:
-                        class_preds = []
-                        temp = rf.predict(train_tile_2Darray[0:slices + 1, :])
-                        class_preds.append(temp)
-                        ctr = 0
-                        for i in range(slices, len(train_tile_2Darray), slices):
-                            current_time = datetime.datetime.now()-start_time
-                            # Format the time as HH:MM:SS
-                            print(f'Processing Tile {index} of {len(img_path_list)}. Elasped time for current tile : ', current_time)
-                            temp = rf.predict(train_tile_2Darray[i + 1:i + (slices + 1), :])
-                            class_preds.append(temp)
-                            print(f'{(i * 100) / len(train_tile_2Darray):.2f}% completed' )
-                            del temp
-                            
-                    except MemoryError as error:
-                        slices =  round(slices/2)
-                        print(f'Not enough RAM, new slices = {slices}')
-
-                    else:
-                        test = False
-                        class_prediction = np.concatenate(class_preds, axis=0)
-
-            # Reshape the prediction back to the original image layout
-            class_prediction = class_prediction.reshape(train_tile_array[:, :, 0].shape)
-
-            # Apply mask
-            mask = (img_temp[:, :, 0] > 0).astype(np.float32)
-            class_prediction_ = class_prediction * mask
-
-            # Save the classified image
-            output_file = os.path.join(output_folder, f"ME_classified_masked_{id_value}.tif")
-            cols, rows = train_tile_array.shape[1], train_tile_array.shape[0]
-            driver = gdal.GetDriverByName("GTiff")
-            outdata = driver.Create(output_file, cols, rows, 1, gdal.GDT_UInt16)
-            outdata.SetGeoTransform(train_tile_temp.GetGeoTransform())
-            outdata.SetProjection(train_tile_temp.GetProjection())
-            outdata.GetRasterBand(1).WriteArray(class_prediction_)
-            outdata.FlushCache()
-
-            #Sieve output classification to remove very small areas of misclassified pixels
-            #if not stitch:
-                #raster_sieve(output_file, output_folder, sieve_size = sieve_size, connected = eight_connected)
-            print(f'Tile {index} of {len(img_path_list)} saved to: {output_file}')
-
-            # Clean up
-            del train_tile_temp, temp_file, img_temp, train_tile_2Darray, class_prediction, class_prediction_, mask
-            outdata = None
-            os.remove(filename)  # Delete the temporary file
-            print(f"Processing time for Tile {index}: {datetime.datetime.now() - start_time}")
+        # Clean up
+        del current_class_prediction, current_masked_prediction, current_tile_3Darray, current_tile_2Darray    
+        outdata = None
+        #os.remove(filename)  # Delete the temporary file from extract_image_data
+        print(f"Processing time for Tile {index}: {datetime.datetime.now() - start_time}")
 
 print('Processing End: {}'.format(datetime.datetime.now()), file=open(results_txt, "a"))
 
 # In[13]: #------------------POST PROCESSING------------------#
     
-
 if stitch:
     print('Stitching rasters')
     stitched_raster_path = os.path.join(output_folder, 'Stitched_Classified_Image.tif')
