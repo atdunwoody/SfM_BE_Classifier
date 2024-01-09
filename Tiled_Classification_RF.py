@@ -239,26 +239,40 @@ def extract_shapefile_data(shapefile, raster, raster_3Darray, results_txt, attri
         n_samples = (roi > 0).sum()
         labels = np.unique(roi[roi > 0])
 
-        return X, y, labels, n_samples, att_
+        return X, y, labels, n_samples
 
     # Subfunction to print information
     def print_info(n_samples, labels, X, y, header):
-        with open(results_txt, "a") as file:
-            print('------------------------------------', file=file)
-            print(header, file=file)
-            print('{n} samples'.format(n=n_samples), file=file)
-            print('Data include {n} classes: {classes}'.format(n=labels.size, classes=labels), file=file)
-            print('X matrix is sized: {sz}'.format(sz=X.shape), file=file)
-            print('y array is sized: {sz}'.format(sz=y.shape), file=file)
-
+        if header == "TRAINING":
+            with open(results_txt, "a") as file:
+                print('------------------------------------', file=file)
+                print(header, file=file)
+                print('{n} samples'.format(n=n_samples), file=file)
+                print('Data include {n} classes: {classes}'.format(n=labels.size, classes=labels), file=file)
+                print('X matrix is sized: {sz}'.format(sz=X.shape), file=file)
+                print('y array is sized: {sz}'.format(sz=y.shape), file=file)
+        elif header == "VALIDATION":
+            print('{n} validation pixels'.format(n=n_val))
+            print('validation data include {n} classes: {classes}'.format(n=labels_v.size, classes=labels_v))
+            print('Our X matrix is sized: {sz_v}'.format(sz_v=X_v.shape))
+            print('Our y array is sized: {sz_v}'.format(sz_v=y_v.shape))
+            with open(results_txt, "a") as file:
+                print('------------------------------------', file)
+                print('VALIDATION', file)
+                
+                print('{n} validation pixels'.format(n=n_val), file)
+                print('validation data include {n} classes: {classes}'.format(n=labels_v.size, classes=labels_v), file)
+        else:
+            #Raise a value error if the header is not TRAINING or VALIDATION
+            raise ValueError("Header for extract_shapefile_data must be TRAINING or VALIDATION")
     # Extract data
-    X, y, labels, n_samples, att_ = extract_from_shapefile(shapefile, raster, raster_3Darray)
+    X, y, labels, n_samples = extract_from_shapefile(shapefile, raster, raster_3Darray)
     print_info(n_samples, labels, X, y, header)
 
-    return X, y, labels, att_
+    return X, y, labels
 
 
-X_train, y_train, labels, att_ = extract_shapefile_data(training_path, train_tile, train_tile_array, results_txt, attribute, "TRAINING")
+X_train, y_train, labels = extract_shapefile_data(training_path, train_tile, train_tile_array, results_txt, attribute, "TRAINING")
 
 
 
@@ -398,93 +412,11 @@ save_classification_image(classification_image, train_tile, train_tile_array, ma
 
 # In[12]: #-------------------MODEL EVALUATION-------------------#
 
-def extract_shapefile_data(shapefile, raster, raster_3Darray, results_txt, attribute, header):
-    # Subfunction to extract data from a shapefile
-    def extract_from_shapefile(shapefile, raster, raster_3Darray):
-        shape_dataset = ogr.Open(shapefile)
-        shape_layer = shape_dataset.GetLayer()
-
-        mem_drv = gdal.GetDriverByName('MEM')
-        mem_raster = mem_drv.Create('', raster.RasterXSize, raster.RasterYSize, 1, gdal.GDT_UInt16)
-        mem_raster.SetProjection(raster.GetProjection())
-        mem_raster.SetGeoTransform(raster.GetGeoTransform())
-        mem_band = mem_raster.GetRasterBand(1)
-        mem_band.Fill(0)
-        mem_band.SetNoDataValue(0)
-
-        att_ = 'ATTRIBUTE=' + attribute
-        err = gdal.RasterizeLayer(mem_raster, [1], shape_layer, None, None, [1], [att_, "ALL_TOUCHED=TRUE"])
-        assert err == gdal.CE_None
-
-        roi = mem_raster.ReadAsArray()
-        X = raster_3Darray[roi > 0, :]
-        y = roi[roi > 0]
-        n_samples = (roi > 0).sum()
-        labels = np.unique(roi[roi > 0])
-
-        return X, y, labels, n_samples, att_
-
-    # Subfunction to print information
-    def print_info(n_samples, labels, X, y, header):
-        with open(results_txt, "a") as file:
-            print('------------------------------------', file=file)
-            print(header, file=file)
-            print('{n} samples'.format(n=n_samples), file=file)
-            print('Data include {n} classes: {classes}'.format(n=labels.size, classes=labels), file=file)
-            print('X matrix is sized: {sz}'.format(sz=X.shape), file=file)
-            print('y array is sized: {sz}'.format(sz=y.shape), file=file)
-
-    # Extract data
-    X, y, labels, n_samples, att_ = extract_from_shapefile(shapefile, raster, raster_3Darray)
-    print_info(n_samples, labels, X, y, header)
-
-    return X, y, labels, att_
-
-# X_val, y_val, labels_val = extract_shapefile_data(validation_path, train_tile, masked_prediction, results_txt, attribute, "VALIDATION")
-
-print('------------------------------------', file=open(results_txt, "a"))
-print('VALIDATION', file=open(results_txt, "a"))
-
-# laod training data from shape file
-shape_dataset_v = ogr.Open(validation_path) # open shape file
-shape_layer_v = shape_dataset_v.GetLayer() # get layer of shape file
-mem_drv_v = gdal.GetDriverByName('MEM')  # create memory layer 
-mem_raster_v = mem_drv_v.Create('',train_tile.RasterXSize,train_tile.RasterYSize,1,gdal.GDT_UInt16) # create memory raster
-mem_raster_v.SetProjection(train_tile.GetProjection()) # set projection to match original image
-mem_raster_v.SetGeoTransform(train_tile.GetGeoTransform()) # set geotransform to match original image
-mem_band_v = mem_raster_v.GetRasterBand(1)
-# fill with zeros so that pixels not covered by polygons are set to 0
-mem_band_v.Fill(0) # fill with zeros
-mem_band_v.SetNoDataValue(0) # set no data value to 0
 
 
-# Rasterize the validation shapefile layer to create a raster layer, mem_raster_v, where pixel values are equal to attribute value of polygons (nodata is 0)
-# "ALL_TOUCHED=TRUE" ensures that all pixels touched by polygons are marked, not just those whose center is within the polygon.
-err_v = gdal.RasterizeLayer(mem_raster_v, [1], shape_layer_v, None, None, [1],  [att_,"ALL_TOUCHED=TRUE"]) # values in the rasterized layer are set to the value of the attribute
-assert err_v == gdal.CE_None # Assert that rasterizing shapefile layer into mem_raster_v was successful
+X_v, y_v, labels_v = extract_shapefile_data(validation_path, train_tile, class_prediction, results_txt, attribute, "VALIDATION")
 
 
-roi_v = mem_raster_v.ReadAsArray() # read the rasterized validation shapefile layer into a numpy array
-
-
-# Find how many non-zero entries we have -- i.e. how many validation data samples?
-n_val = (roi_v > 0).sum()
-print('{n} validation pixels'.format(n=n_val))
-print('{n} validation pixels'.format(n=n_val), file=open(results_txt, "a"))
-
-# Print validation data classes
-labels_v = np.unique(roi_v[roi_v > 0])
-print('validation data include {n} classes: {classes}'.format(n=labels_v.size, classes=labels_v))
-print('validation data include {n} classes: {classes}'.format(n=labels_v.size, classes=labels_v), file=open(results_txt, "a"))
-
-# Subset the classification image with the validation image = X
-# Mask the classes on the validation dataset = y
-# These will have n_samples rows
-X_v = class_prediction[roi_v > 0]
-y_v = roi_v[roi_v > 0]
-
-print('Our X matrix is sized: {sz_v}'.format(sz_v=X_v.shape))
-print('Our y array is sized: {sz_v}'.format(sz_v=y_v.shape))
 
 # Cross-tabulate predictions 
 convolution_mat = pd.crosstab(y_v, X_v, margins=True)
@@ -522,6 +454,7 @@ del train_tile # close the image dataset
 if grid_ids:
     for index, (img_path, id_value) in enumerate(zip(img_path_list, id_values), start=1):
             #train_val_grid_id is the id value of the training tile, which was already processed in model evaluation
+            #Skip the training tile if process_training_only is set to True
             if id_value == train_val_grid_id:
                 continue
             start_time = datetime.datetime.now()
