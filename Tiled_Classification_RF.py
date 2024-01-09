@@ -216,6 +216,7 @@ train_tile, train_tile_array = extract_image_data(train_tile_path)
 # In[7]: #-------------------TRAINING DATA EXTRACTION FROM SHAPEFILE-------------------#
 
 def extract_shapefile_data(shapefile, raster, raster_3Darray, results_txt, attribute, header):
+    
     # Subfunction to extract data from a shapefile
     def extract_from_shapefile(shapefile, raster, raster_3Darray):
         shape_dataset = ogr.Open(shapefile)
@@ -234,13 +235,16 @@ def extract_shapefile_data(shapefile, raster, raster_3Darray, results_txt, attri
         assert err == gdal.CE_None
 
         roi = mem_raster.ReadAsArray()
-        X = raster_3Darray[roi > 0, :]
+        if header == "TRAINING":
+            X = raster_3Darray[roi > 0, :]
+        elif header == "VALIDATION":
+            X = raster_3Darray[roi > 0]
         y = roi[roi > 0]
         n_samples = (roi > 0).sum()
         labels = np.unique(roi[roi > 0])
 
         return X, y, labels, n_samples
-
+    
     # Subfunction to print information
     def print_info(n_samples, labels, X, y, header):
         if header == "TRAINING":
