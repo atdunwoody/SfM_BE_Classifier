@@ -215,10 +215,10 @@ train_tile, train_tile_array = extract_image_data(train_tile_path)
 
 # In[7]: #-------------------TRAINING DATA EXTRACTION FROM SHAPEFILE-------------------#
 
-def extract_shapefile_data(shapefile, raster, raster_3Darray, results_txt, attribute, header):
-    
+def extract_shapefile_data(shapefile, raster, raster_array, results_txt, attribute, header):
+
     # Subfunction to extract data from a shapefile
-    def extract_from_shapefile(shapefile, raster, raster_3Darray):
+    def extract_from_shapefile(shapefile, raster, raster_array):
         shape_dataset = ogr.Open(shapefile)
         shape_layer = shape_dataset.GetLayer()
 
@@ -235,15 +235,15 @@ def extract_shapefile_data(shapefile, raster, raster_3Darray, results_txt, attri
         assert err == gdal.CE_None
 
         roi = mem_raster.ReadAsArray()
-        if header == "TRAINING":
-            X = raster_3Darray[roi > 0, :]
-        elif header == "VALIDATION":
-            X = raster_3Darray[roi > 0]
+        try:
+            X = raster_array[roi > 0, :]
+        except IndexError:
+            X = raster_array[roi > 0]
         y = roi[roi > 0]
         n_samples = (roi > 0).sum()
         labels = np.unique(roi[roi > 0])
 
-        return X, y, labels, n_samples
+        return X, y, labels, n_samples, roi
     
     # Subfunction to print information
     def print_info(n_samples, labels, X, y, header):
@@ -256,27 +256,27 @@ def extract_shapefile_data(shapefile, raster, raster_3Darray, results_txt, attri
                 print('X matrix is sized: {sz}'.format(sz=X.shape), file=file)
                 print('y array is sized: {sz}'.format(sz=y.shape), file=file)
         elif header == "VALIDATION":
-            print('{n} validation pixels'.format(n=n_val))
-            print('validation data include {n} classes: {classes}'.format(n=labels_v.size, classes=labels_v))
-            print('Our X matrix is sized: {sz_v}'.format(sz_v=X_v.shape))
-            print('Our y array is sized: {sz_v}'.format(sz_v=y_v.shape))
+            print('{n} validation pixels'.format(n=n_samples))
+            print('validation data include {n} classes: {classes}'.format(n=labels.size, classes=labels))
+            print('Our X matrix is sized: {sz_v}'.format(sz_v=X.shape))
+            print('Our y array is sized: {sz_v}'.format(sz_v=y.shape))
             with open(results_txt, "a") as file:
                 print('------------------------------------', file)
                 print('VALIDATION', file)
                 
-                print('{n} validation pixels'.format(n=n_val), file)
-                print('validation data include {n} classes: {classes}'.format(n=labels_v.size, classes=labels_v), file)
+                print('{n} validation pixels'.format(n=n_samples), file)
+                print('validation data include {n} classes: {classes}'.format(n=labels.size, classes=labels), file)
         else:
             #Raise a value error if the header is not TRAINING or VALIDATION
             raise ValueError("Header for extract_shapefile_data must be TRAINING or VALIDATION")
     # Extract data
-    X, y, labels, n_samples = extract_from_shapefile(shapefile, raster, raster_3Darray)
+    X, y, labels, n_samples, roi = extract_from_shapefile(shapefile, raster, raster_array)
     print_info(n_samples, labels, X, y, header)
 
-    return X, y, labels
+    return X, y, labels, roi
 
 
-X_train, y_train, labels = extract_shapefile_data(training_path, train_tile, train_tile_array, results_txt, attribute, "TRAINING")
+X_train, y_train, labels, roi = extract_shapefile_data(training_path, train_tile, train_tile_array, results_txt, attribute, "TRAINING")
 
 
 
@@ -418,38 +418,40 @@ save_classification_image(classification_image, train_tile, train_tile_array, ma
 
 
 
-X_v, y_v, labels_v = extract_shapefile_data(validation_path, train_tile, class_prediction, results_txt, attribute, "VALIDATION")
+X_v, y_v, labels_v, roi_v = extract_shapefile_data(validation_path, train_tile, class_prediction, results_txt, attribute, "VALIDATION")
 
 
+def model_evaluation(X_v, y_v, roi_v, results_txt):
+    # Cross-tabulate predictions 
+    convolution_mat = pd.crosstab(y_v, X_v, margins=True)
+    print(convolution_mat)
+    print(convolution_mat, file=open(results_txt, "a"))
+    # if you want to save the confusion matrix as a CSV file:
+    #savename = 'C:\\save\\to\\folder\\conf_matrix_' + str(est) + '.csv'
+    #convolution_mat.to_csv(savename, sep=';', decimal = '.')
 
-# Cross-tabulate predictions 
-convolution_mat = pd.crosstab(y_v, X_v, margins=True)
-print(convolution_mat)
-print(convolution_mat, file=open(results_txt, "a"))
-# if you want to save the confusion matrix as a CSV file:
-#savename = 'C:\\save\\to\\folder\\conf_matrix_' + str(est) + '.csv'
-#convolution_mat.to_csv(savename, sep=';', decimal = '.')
+    # information about precision, recall, f1_score, and support:
+    # http://scikit-learn.org/stable/modules/generated/sklearn.metrics.precision_recall_fscore_support.html
+    #sklearn.metrics.precision_recall_fscore_support
+    target_names = list()
+    for name in range(1,(labels.size)+1):
+        target_names.append(str(name))
+    sum_mat = classification_report(y_v,X_v,target_names=target_names)
+    print(sum_mat)
+    print(sum_mat, file=open(results_txt, "a"))
 
-# information about precision, recall, f1_score, and support:
-# http://scikit-learn.org/stable/modules/generated/sklearn.metrics.precision_recall_fscore_support.html
-#sklearn.metrics.precision_recall_fscore_support
-target_names = list()
-for name in range(1,(labels.size)+1):
-    target_names.append(str(name))
-sum_mat = classification_report(y_v,X_v,target_names=target_names)
-print(sum_mat)
-print(sum_mat, file=open(results_txt, "a"))
+    # Overall Accuracy (OAA)
+    print('OAA = {} %'.format(accuracy_score(y_v,X_v)*100))
+    print('OAA = {} %'.format(accuracy_score(y_v,X_v)*100), file=open(results_txt, "a"))
 
-# Overall Accuracy (OAA)
-print('OAA = {} %'.format(accuracy_score(y_v,X_v)*100))
-print('OAA = {} %'.format(accuracy_score(y_v,X_v)*100), file=open(results_txt, "a"))
+    # Confusion Matrix
+    cm_val = confusion_matrix(roi_v[roi_v > 0],class_prediction[roi_v > 0])
+    plt.figure(figsize=(10,7))
+    sn.heatmap(cm_val, annot=True, fmt='g')
+    plt.xlabel('classes - predicted')
+    plt.ylabel('classes - truth')
 
-# Confusion Matrix
-cm_val = confusion_matrix(roi_v[roi_v > 0],class_prediction[roi_v > 0])
-plt.figure(figsize=(10,7))
-sn.heatmap(cm_val, annot=True, fmt='g')
-plt.xlabel('classes - predicted')
-plt.ylabel('classes - truth')
+model_evaluation(X_v, y_v, roi_v, results_txt)
 
 del train_tile # close the image dataset
 
