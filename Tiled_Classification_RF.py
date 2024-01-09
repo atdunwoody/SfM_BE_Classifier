@@ -37,7 +37,7 @@ import datetime
 # Tell GDAL to throw Python exceptions, and register all drivers
 gdal.UseExceptions()
 gdal.AllRegister()
-from GIStools.GIStools import preprocess_function 
+from GIStools.GIStools import preprocess_SfM_inputs
 from GIStools.Stitch_Rasters import stitch_rasters
 from GIStools.Grid_Creation import create_grid
 from GIStools.Raster_Matching import pad_rasters_to_largest
@@ -385,22 +385,21 @@ def main():
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
     
-    #Create grid cells to process large rasters in chunks. 
+
+
+    
+    #-------------------Processing------------------#
+        #Create grid cells to process large rasters in chunks. 
     #Each grid cell is the size of the extent training and validation shapefiles
     train_val_grid_id, grid_path = create_grid([training_path,validation_path], DEM_path, in_dir)
     if process_training_only: #preprocess_function will now only process the training tile
         grid_ids.append(train_val_grid_id)
-    #Prepare input stacked rasters for random forest classification
+    
     #Bands output from preprocess function: Roughness, R, G, B, Saturation, Excessive Green Index
-    grid_ids = preprocess_function(grid_path, ortho_path, DEM_path, grid_ids, in_dir)
+    grid_ids = preprocess_SfM_inputs(grid_path, ortho_path, DEM_path, grid_ids, in_dir) #Prepare input stacked rasters for random forest classification
     print('Grid IDs to process: {}'.format(grid_ids))
-    #Ensure all rasters are the same size by padding smaller rasters with 0s
-    #Having raster tiles of identical sizes is required for random forest classification
+    #Ensure all rasters are the same size by padding smaller rasters with 0s. Having raster tiles of identical sizes is required for random forest classification
     pad_rasters_to_largest(in_dir)
-
-    
-    #-------------------Processing------------------#
-    
     img_path_list, id_values = find_files(in_dir) # list of all grid-clipped images to classify and associated id values
     attribute_names = print_attributes(training_path) # print the attributes in the training shapefile
     train_tile_path = os.path.join(in_dir, f'stacked_bands_tile_input_{train_val_grid_id}.tif') # grid-clipped-image containing the training data

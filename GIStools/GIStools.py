@@ -357,7 +357,7 @@ def match_dem_resolution(source_dem_path, target_dem_path, output_path, verbose 
     if verbose:
         print(f"Resampled DEM saved to: {output_path}")
 
-def preprocess_function(shapefile_path, ortho_filepath, DEM_filepath, grid_ids, output_folder, verbose=False):
+def preprocess_SfM_inputs(shapefile_path, ortho_filepath, DEM_filepath, grid_ids, output_folder, verbose=False):
     """
     Preprocess ortho and roughness data for specified grid cells for RF classification.
 
@@ -444,7 +444,7 @@ def main():
     output_folder = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test"
     grid_ids = []  # Choose grid IDs to process, or leave empty to process all grid cells
     
-    preprocess_function(grid_path, ortho_path, DEM_path, grid_ids, output_folder)
+    preprocess_SfM_inputs(grid_path, ortho_path, DEM_path, grid_ids, output_folder)
 
     
 if __name__ == '__main__':
