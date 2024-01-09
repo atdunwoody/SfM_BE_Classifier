@@ -314,7 +314,7 @@ def save_classification_image(classification_image, raster, raster_3Darray, mask
     outdata.FlushCache() ##saves to disk
     print('Image saved to: {}'.format(classification_image))
 
-def model_evaluation(X_v, y_v, roi_v, results_txt):
+def model_evaluation(X_v, y_v, labels, roi_v, class_prediction, results_txt):
     # Cross-tabulate predictions 
     convolution_mat = pd.crosstab(y_v, X_v, margins=True)
     print(convolution_mat)
@@ -368,7 +368,7 @@ def main():
 
     est = 300 # define number of trees that will be used to build random forest (default = 300)
     n_cores = -1 # -1 -> all available computing cores will be used (default = -1)
-    verbose=True # Set to True to print out each tree progression, set to False to not print out each tree progression (default = True)
+    verbose = True # Set to True to print out each tree progression, set to False to not print out each tree progression (default = True)
     stitch = True # Set to True to stitch all classified tiles into a single image, set to False to keep classified tiles in separate rasters (default = True)
 
     #--------------------Input Preparation-----------------------------#
@@ -378,7 +378,8 @@ def main():
 
     #List of grid-clipped images to classify and associated id values
     in_dir = os.path.join(output_folder, 'Tiled_Inputs')
-    
+    #output folder for list of img_path_list grid-clipped classified images
+    classification_image = os.path.join(output_folder, 'Classified_Training_Image.tif')
     # directory, where the classification image should be saved:
     output_folder = os.path.join(output_folder, 'Results')
     if not os.path.exists(output_folder):
@@ -412,9 +413,9 @@ def main():
     train_tile_2Darray = flatten_raster_bands(train_tile_3Darray) # Convert NaNs to 0.0
     class_prediction = predict_classification(rf, train_tile_2Darray, train_tile_3Darray)
     masked_prediction = reshape_and_mask_prediction(class_prediction, train_tile_3Darray)
-    save_classification_image(train_tile_path, train_tile, train_tile_3Darray, masked_prediction)
+    save_classification_image(classification_image, train_tile, train_tile_3Darray, masked_prediction)
     X_v, y_v, labels_v, roi_v = extract_shapefile_data(validation_path, train_tile, class_prediction, results_txt, attribute, "VALIDATION")
-    model_evaluation(X_v, y_v, roi_v, results_txt)
+    model_evaluation(X_v, y_v, labels_v, roi_v, class_prediction, results_txt)
 
     del train_tile # close the image dataset
 
@@ -436,7 +437,7 @@ def main():
             current_tile_2Darray = flatten_raster_bands(current_tile_3Darray)
             
             # Flatten multiple raster bands (3D array) into 2D array for classification
-            current_class_prediction = predict_classification(rf, current_tile_2Darray)
+            current_class_prediction = predict_classification(rf, current_tile_2Darray, current_tile_3Darray)
             current_masked_prediction = reshape_and_mask_prediction(current_class_prediction, current_tile_3Darray)
             output_file = os.path.join(output_folder, f"ME_classified_masked_{id_value}.tif")
             save_classification_image(output_file, current_tile, current_tile_3Darray, current_masked_prediction)
