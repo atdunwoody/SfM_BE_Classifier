@@ -381,7 +381,7 @@ def preprocess_function(shapefile_path, ortho_filepath, DEM_filepath, grid_ids, 
         #Print update on progress using actual iteration number instead of grid_id
         print(f"Processing grid cell {grid_ids.index(grid_id) + 1} of {len(grid_ids)}")
         
-        # Create a subfolder for each grid ID
+        # Step 1: Create a subfolder for each grid ID
         grid_output_folder = os.path.join(output_folder, f'Grid_{grid_id}')
         Path(grid_output_folder).mkdir(parents=True, exist_ok=True)
 
@@ -398,6 +398,7 @@ def preprocess_function(shapefile_path, ortho_filepath, DEM_filepath, grid_ids, 
         rgb_bands = split_bands(masked_ortho, 'ortho', grid_output_folder, pop =True)
         if verbose:
             print("Proccessing RGB Bands...")
+            
         # Step 5: Process RGB bands
         processed_rgb = processRGB(rgb_bands, verbose=verbose)
         # Step 6: Append processed RGB to list
@@ -418,11 +419,10 @@ def preprocess_function(shapefile_path, ortho_filepath, DEM_filepath, grid_ids, 
         matched_roughness_path.extend(rasters_to_stack)
 
         # Step 10: Stack bands
-        
-        output_folder_stacked = os.path.join(output_folder,"Tiled_Inputs")
-        if not os.path.exists(output_folder_stacked):
-            os.makedirs(output_folder_stacked)
-        stacked_output = stack_bands(matched_roughness_path, output_folder_stacked, suffix = grid_id, verbose=verbose)
+
+        if not os.path.exists(output_folder):
+            os.makedirs(output_folder)
+        stacked_output = stack_bands(matched_roughness_path, output_folder, suffix = grid_id, verbose=verbose)
 
         outputs[grid_id] = stacked_output
         #Close datasets

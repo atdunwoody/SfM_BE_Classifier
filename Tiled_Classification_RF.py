@@ -101,7 +101,7 @@ def print_header(results_txt, train_tile_path, training_path, validation_path, i
     print('-------------------------------------------------', file=open(results_txt, "a"))
 
 #-------------------IMAGE DATA EXTRACTION-------------------#
-def extract_image_data(image_path, results_txt, log=False):
+def extract_image_data(image_path, results_txt, est=None, log=False):
     print('Extracting image data from: {}'.format(image_path))
     img_tile = gdal.Open(image_path, gdal.GA_ReadOnly)
 
@@ -195,7 +195,7 @@ def extract_shapefile_data(shapefile, raster, raster_array, results_txt, attribu
     return X, y, labels, roi
 
 #--------------------Train Random Forest & RUN MODEL DIAGNOSTICS-----------------#
-def train_RF(X, y, est, n_cores, verbose):
+def train_RF(X, y, train_tile, results_txt, est, n_cores, verbose):
     if verbose:
         # verbose = 2 -> prints out every tree progression
         verbose = 2
@@ -252,7 +252,7 @@ def flatten_raster_bands(raster_3Darray):
     return np.nan_to_num(raster_2Darray)
 
 # Predict for each pixel on training tile. First prediction will be tried on the entire image and the dataset will be sliced if there is not enough RAM
-def predict_classification(rf, raster_2Darray):
+def predict_classification(rf, raster_2Darray, raster_3Darray):
     try:
         class_prediction = rf.predict(raster_2Darray) # Predict the classification for each pixel using the trained model
     # Check if there is enough RAM to process the entire image, if not, slice the image into smaller pieces and process each piece
@@ -288,7 +288,7 @@ def predict_classification(rf, raster_2Darray):
         print('No slicing was necessary!')
 
     # Reshape our classification map back into a 2D matrix so we can visualize it`` 
-    class_prediction = class_prediction.reshape(train_tile_array[:, :, 0].shape)
+    class_prediction = class_prediction.reshape(raster_3Darray[:, :, 0].shape)
     print('Reshaped back to {}'.format(class_prediction.shape))
     return class_prediction
 
@@ -391,7 +391,7 @@ def main():
         grid_ids.append(train_val_grid_id)
     #Prepare input stacked rasters for random forest classification
     #Bands output from preprocess function: Roughness, R, G, B, Saturation, Excessive Green Index
-    grid_ids = preprocess_function(grid_path, ortho_path, DEM_path, grid_ids, output_folder)
+    grid_ids = preprocess_function(grid_path, ortho_path, DEM_path, grid_ids, in_dir)
     print('Grid IDs to process: {}'.format(grid_ids))
     #Ensure all rasters are the same size by padding smaller rasters with 0s
     #Having raster tiles of identical sizes is required for random forest classification
@@ -405,12 +405,12 @@ def main():
     train_tile_path = os.path.join(in_dir, f'stacked_bands_tile_input_{train_val_grid_id}.tif') # grid-clipped-image containing the training data
     results_txt = os.path.join(output_folder, 'Results_Summary.txt') # directory, where the all meta results will be saved
     print_header(results_txt, train_tile_path, training_path, validation_path, img_path_list, attribute) # print the header for the results text file
-    train_tile, train_tile_3Darray = extract_image_data(train_tile_path, results_txt, log=True) # extract the training tile image data
+    train_tile, train_tile_3Darray = extract_image_data(train_tile_path, results_txt, est, log=True) # extract the training tile image data
     # 
     X_train, y_train, labels, roi = extract_shapefile_data(training_path, train_tile, train_tile_3Darray, results_txt, attribute, "TRAINING")
-    rf, rf2 = train_RF(X_train, y_train, est, n_cores, verbose)
+    rf, rf2 = train_RF(X_train, y_train, train_tile, results_txt, est, n_cores, verbose)
     train_tile_2Darray = flatten_raster_bands(train_tile_3Darray) # Convert NaNs to 0.0
-    class_prediction = predict_classification(rf, train_tile_2Darray)
+    class_prediction = predict_classification(rf, train_tile_2Darray, train_tile_3Darray)
     masked_prediction = reshape_and_mask_prediction(class_prediction, train_tile_3Darray)
     save_classification_image(train_tile_path, train_tile, train_tile_3Darray, masked_prediction)
     X_v, y_v, labels_v, roi_v = extract_shapefile_data(validation_path, train_tile, class_prediction, results_txt, attribute, "VALIDATION")
