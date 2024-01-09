@@ -384,7 +384,8 @@ def preprocess_SfM_inputs(shapefile_path, ortho_filepath, DEM_filepath, grid_ids
         # Step 1: Create a subfolder for each grid ID
         grid_output_folder = os.path.join(output_folder, f'Grid_{grid_id}')
         Path(grid_output_folder).mkdir(parents=True, exist_ok=True)
-
+        
+        
         #Step 2: Create roughness raster
         roughness_path = os.path.join(grid_output_folder, 'roughness.tif')
         calculate_roughness(DEM_filepath, roughness_path, verbose=verbose)
@@ -408,9 +409,15 @@ def preprocess_SfM_inputs(shapefile_path, ortho_filepath, DEM_filepath, grid_ids
             print("Rasters to stack: ", rasters_to_stack)
 
         # Step 7: Clip roughness raster by RGB shapefile
-        
-        clipped_roughness = clip_rasters_by_extent([masked_rasters[grid_id][1]], masked_ortho, verbose=verbose)[0]
-
+        try:
+            clipped_roughness = clip_rasters_by_extent([masked_rasters[grid_id][1]], masked_ortho, verbose=verbose)[0]
+        #IndexError exception
+        except IndexError:
+            print("Tile does not contain data. Continuing to next grid cell.")
+            shutil.rmtree(grid_output_folder)
+            #delete grid ID from list of grid IDs to process
+            grid_ids.remove(grid_id)
+            continue
         # Step 8: Match DEM resolution
         matched_roughness_path = os.path.join(grid_output_folder, 'matched_roughness.tif')
         match_dem_resolution(clipped_roughness, masked_ortho, matched_roughness_path, verbose=verbose)

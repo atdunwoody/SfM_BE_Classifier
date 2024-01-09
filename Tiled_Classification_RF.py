@@ -387,6 +387,10 @@ def main():
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
     classification_image = os.path.join(output_folder, 'Classified_Training_Image.tif')
+    classified_tile_folder = os.path.join(output_folder, 'Classified_Tiles')
+    if not os.path.exists(classified_tile_folder):
+        os.makedirs(os.path.join(classified_tile_folder))
+    
     #-------------------Processing------------------#
         #Create grid cells to process large rasters in chunks. 
     #Each grid cell is the size of the extent training and validation shapefiles
@@ -441,7 +445,7 @@ def main():
                 # Flatten multiple raster bands (3D array) into 2D array for classification
                 current_class_prediction = predict_classification(rf, current_tile_2Darray, current_tile_3Darray)
                 current_masked_prediction = reshape_and_mask_prediction(current_class_prediction, current_tile_3Darray)
-                output_file = os.path.join(output_folder, "Classified_Tiles", f"ME_classified_masked_{id_value}.tif")
+                output_file = os.path.join(classified_tile_folder, f"Classified_Tile_{id_value}.tif")
                 save_classification_image(output_file, current_tile, current_tile_3Darray, current_masked_prediction)
                 
                 
@@ -462,7 +466,7 @@ def main():
         #Check if stitched_raster_path exists, if so, delete it
         if os.path.exists(stitched_raster_path):
             os.remove(stitched_raster_path)
-        stitch_rasters(output_folder, stitched_raster_path)  
+        stitch_rasters(classified_tile_folder, stitched_raster_path)  
 
     if validation_path_2 is not None:
         #------------------SECOND VALIDATION FILE------------------#
