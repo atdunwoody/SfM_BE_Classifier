@@ -62,19 +62,25 @@ def create_grid(shapefile_paths, bounding_raster, output_folder, cell_dim=None, 
             return (min_x, min_y, max_x, max_y)
 
         combined_extent = None
-        for vector_path in shapefile_paths:
-            current_extent = get_layer_extent(vector_path)
-            if current_extent:
-                if combined_extent and len(shapefile_paths) > 1:
-                    combined_extent = combine_extents(combined_extent, current_extent)
-                else:
-                    combined_extent = current_extent
+        #check if shapefile_paths has more than one shapefile
+        if len(shapefile_paths) > 1:
+            for vector_path in shapefile_paths:
+                current_extent = get_layer_extent(vector_path)
+                if current_extent:
+                    if combined_extent:
+                        combined_extent = combine_extents(combined_extent, current_extent)
+                    else:
+                        combined_extent = current_extent
+        else:
+            combined_extent = get_layer_extent(shapefile_paths[0])
         return combined_extent
     
     
     cell_bounds = get_combined_extent(shapefile_paths)
         # Load the raster
-    if not cell_dim: 
+    #Execute statement if cell_dim is not defined
+        
+    if cell_dim is None:
         # Calculate 10% buffer for each dimension of the cell_bounds
         buffer_width_x = (cell_bounds[2] - cell_bounds[0]) * 0.1
         buffer_width_y = (cell_bounds[3] - cell_bounds[1]) * 0.1
@@ -89,10 +95,7 @@ def create_grid(shapefile_paths, bounding_raster, output_folder, cell_dim=None, 
         buffer_width_x = (cell_bounds[2] - cell_bounds[0]) * 0.1
         buffer_width_y = (cell_bounds[3] - cell_bounds[1]) * 0.1
         #check if cell_dim is larger than cell_bounds
-        if grid_width < (cell_bounds[2] - cell_bounds[0]):
-            #Raise an error that the validation shapefile is too large
-            #create a new line within the error that tells the user to use a smaller cell_dim
-            raise ValueError("Current validation data a larger extent than the combined original validation & training shapefiles the model was trained on. Reduce extent of second validation shapefile or increase cell_dim.")
+        
     with rasterio.open(bounding_raster) as src:
         raster_bounds = src.bounds
         raster_crs = src.crs

@@ -77,52 +77,6 @@ def find_diff_rasters(folder_path, target_width, target_height):
     return different_dimension_files
 
 
-def pad_rasters(source_rasters_paths, target_raster_path, output_rasters_dir, pad_value=0):
-    """
-    Extends each source raster in the list to match the width and height of the target raster.
-
-    :param source_rasters_paths: List of paths to the source raster files.
-    :param target_raster_path: Path to the target raster file.
-    :param output_rasters_dir: Directory where the extended rasters will be saved.
-    :param pad_value: The value used for padding. Defaults to 0.
-    """
-    # Read the target raster to get its dimensions
-    with rasterio.open(target_raster_path) as tgt:
-        tgt_meta = tgt.meta
-
-    # Process each source raster
-    for source_raster_path in source_rasters_paths:
-       
-        print('Processing: ', source_raster_path)
-        with rasterio.open(source_raster_path) as src:
-            src_data = src.read()  # Read all bands
-            src_meta = src.meta
-
-        # Calculate the required padding
-        pad_height = max(tgt_meta['height'] - src_meta['height'], 0)
-        pad_width = max(tgt_meta['width'] - src_meta['width'], 0)
-
-        # Check if padding is necessary
-        if pad_height > 0 or pad_width > 0:
-            # Pad each band of the source raster
-            padded_data = np.pad(src_data, ((0, 0), (0, pad_height), (0, pad_width)), 'constant', constant_values=pad_value)
-
-            # Update the metadata for the new dimensions
-            src_meta.update({
-                'height': tgt_meta['height'],
-                'width': tgt_meta['width']
-            })
-        else:
-            padded_data = src_data
-
-        output_raster_path = output_rasters_dir
-
-        # Write the new raster
-        print('Writing: ', output_raster_path)
-        with rasterio.open(output_raster_path, 'w', **src_meta) as out_raster:
-            out_raster.write(padded_data)
-        print('Mew raster dimensions: ', print_res(output_rasters_dir))
-
 def find_largest_dimensions(rasters):
     """
     Finds the largest width and largest height from a list of rasters.
@@ -201,7 +155,7 @@ def call_trim(folder, output, target_raster_path):
             print('Finished processing', filename)
 
 
-def pad_rasters_to_largest(source_rasters_folder, raster_dims, pad_value=0):
+def pad_rasters_to_largest(source_rasters_folder, raster_dims = None, pad_value=0):
     """
     Pads each raster file in the source folder to match the width and height of the largest raster found.
     Pads all bands of each raster with the specified pad value.
@@ -233,7 +187,7 @@ def pad_rasters_to_largest(source_rasters_folder, raster_dims, pad_value=0):
             source_rasters_paths.append(file_path)
 
     # Find the largest dimensions among all rasters
-    if not raster_dims: 
+    if raster_dims is None: 
         max_width, max_height = find_largest_dimensions(source_rasters_paths)
         raster_dims = (max_width, max_height)
     else:
