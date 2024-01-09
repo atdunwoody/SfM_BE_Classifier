@@ -6,7 +6,7 @@ from osgeo import ogr
 ogr.UseExceptions()
 import math
 
-def create_grid(shapefile_paths, bounding_raster, output_folder):
+def create_grid(shapefile_paths, bounding_raster, output_folder, cell_bounds=None, bounds_multiplier=1):
     
     def find_grid_id(cell_bounds, grid_shapefile):
         """
@@ -65,14 +65,14 @@ def create_grid(shapefile_paths, bounding_raster, output_folder):
         for vector_path in shapefile_paths:
             current_extent = get_layer_extent(vector_path)
             if current_extent:
-                if combined_extent:
+                if combined_extent and len(shapefile_paths) > 1:
                     combined_extent = combine_extents(combined_extent, current_extent)
                 else:
                     combined_extent = current_extent
         return combined_extent
     
-    
-    cell_bounds = get_combined_extent(shapefile_paths)
+    if not cell_bounds:
+        cell_bounds = get_combined_extent(shapefile_paths)
     # Load the raster
     with rasterio.open(bounding_raster) as src:
         raster_bounds = src.bounds
@@ -82,9 +82,11 @@ def create_grid(shapefile_paths, bounding_raster, output_folder):
     buffer_width_x = (cell_bounds[2] - cell_bounds[0]) * 0.1
     buffer_width_y = (cell_bounds[3] - cell_bounds[1]) * 0.1
     
+    #square root of bounds multipler
+    
     # Determine the grid cell size - it must be at least as large as the buffered cell_bounds
-    grid_width = cell_bounds[2] - cell_bounds[0] + 2 * buffer_width_x
-    grid_height = cell_bounds[3] - cell_bounds[1] + 2 * buffer_width_y
+    grid_width = (cell_bounds[2] - cell_bounds[0])*math.sqrt(bounds_multiplier) + 2 * buffer_width_x
+    grid_height = (cell_bounds[3] - cell_bounds[1])*math.sqrt(bounds_multiplier) + 2 * buffer_width_y
     
     # Starting from the lower left corner of the cell_bounds
     startx = cell_bounds[0] - buffer_width_x
@@ -142,13 +144,6 @@ def main():
     second_vector_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Training-Validation Shapes\Archive\Validation\Validation.shp"  
     #EPSG_Code = '6342'  # Replace with EPSG code for shapefile CRS
     
-    # Get extents of both layers
-    bounds = combine_extents(get_layer_extent(first_vector_path), get_layer_extent(second_vector_path))
-
-
-    create_grid(bounds, template_raster_path, output_path)
-    find_grid_id(bounds, r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test\Grid_Creation_Test\grid.shp")
-
-
+    
 if __name__ == '__main__':
     main()

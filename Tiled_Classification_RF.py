@@ -385,9 +385,6 @@ def main():
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
     
-
-
-    
     #-------------------Processing------------------#
         #Create grid cells to process large rasters in chunks. 
     #Each grid cell is the size of the extent training and validation shapefiles
@@ -406,15 +403,16 @@ def main():
     results_txt = os.path.join(output_folder, 'Results_Summary.txt') # directory, where the all meta results will be saved
     print_header(results_txt, train_tile_path, training_path, validation_path, img_path_list, attribute) # print the header for the results text file
     train_tile, train_tile_3Darray = extract_image_data(train_tile_path, results_txt, est, log=True) # extract the training tile image data
-    # 
+    # Extract training data from shapefile
     X_train, y_train, labels, roi = extract_shapefile_data(training_path, train_tile, train_tile_3Darray, results_txt, attribute, "TRAINING")
-    rf, rf2 = train_RF(X_train, y_train, train_tile, results_txt, est, n_cores, verbose)
+    rf, rf2 = train_RF(X_train, y_train, train_tile, results_txt, est, n_cores, verbose) # train the random forest classifier
     train_tile_2Darray = flatten_raster_bands(train_tile_3Darray) # Convert NaNs to 0.0
-    class_prediction = predict_classification(rf, train_tile_2Darray, train_tile_3Darray)
-    masked_prediction = reshape_and_mask_prediction(class_prediction, train_tile_3Darray)
-    save_classification_image(classification_image, train_tile, train_tile_3Darray, masked_prediction)
-    X_v, y_v, labels_v, roi_v = extract_shapefile_data(validation_path, train_tile, class_prediction, results_txt, attribute, "VALIDATION")
-    model_evaluation(X_v, y_v, labels_v, roi_v, class_prediction, results_txt)
+    class_prediction = predict_classification(rf, train_tile_2Darray, train_tile_3Darray) # predict the classification for each pixel using the trained model
+    masked_prediction = reshape_and_mask_prediction(class_prediction, train_tile_3Darray) # mask the prediction to only include bare earth and vegetation
+    save_classification_image(classification_image, train_tile, train_tile_3Darray, masked_prediction) # save the masked classification image
+    # Extract validation data from shapefile
+    X_v, y_v, labels_v, roi_v = extract_shapefile_data(validation_path, train_tile, class_prediction, results_txt, attribute, "VALIDATION") 
+    model_evaluation(X_v, y_v, labels_v, roi_v, class_prediction, results_txt) # evaluate the model using the validation data
 
     del train_tile # close the image dataset
 
