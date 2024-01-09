@@ -104,14 +104,15 @@ print('Training Image: {}'.format(train_tile_path))
 #output folder for list of img_path_list grid-clipped classified images
 classification_image = os.path.join(output_folder, 'Classified_Training_Image.tif')
 
-# directory, where the all meta results should be saved:
-results_txt = os.path.join(output_folder, 'Results_Summary.txt')
+
 
 # directory, where the classification image should be saved:
 output_folder = os.path.join(output_folder, 'Results')
 if not os.path.exists(output_folder):
     os.makedirs(output_folder)
-    
+# directory, where the all meta results should be saved:
+results_txt = os.path.join(output_folder, 'Results_Summary.txt')
+
 #Check if grid_ids has a length of 1, if so, set Stitch to False, since there's no rasters to stitch
 if len(grid_ids) == 1:
     stitch = False
@@ -246,7 +247,7 @@ def extract_shapefile_data(shapefile, raster, raster_array, results_txt, attribu
         return X, y, labels, n_samples, roi
     
     # Subfunction to print information
-    def print_info(n_samples, labels, X, y, header):
+    def print_info(n_samples, labels, X, y, results_txt, header):
         if header == "TRAINING":
             with open(results_txt, "a") as file:
                 print('------------------------------------', file=file)
@@ -271,7 +272,7 @@ def extract_shapefile_data(shapefile, raster, raster_array, results_txt, attribu
             raise ValueError("Header for extract_shapefile_data must be TRAINING or VALIDATION")
     # Extract data
     X, y, labels, n_samples, roi = extract_from_shapefile(shapefile, raster, raster_array)
-    print_info(n_samples, labels, X, y, header)
+    print_info(n_samples, labels, X, y, results_txt, header)
 
     return X, y, labels, roi
 
@@ -338,7 +339,6 @@ def flatten_raster_bands(raster_3Darray):
     raster_2Darray = raster_3Darray.reshape(new_shape)
     print('Reshaped from {} to {}'.format(raster_3Darray.shape, raster_2Darray.shape))
     return np.nan_to_num(raster_2Darray)
-
 
 
 #train_tile_2Darray = train_tile_array[:, :, :int(train_tile_array.shape[2])].reshape(new_shape)  # reshape the image array to [n_samples, n_features]
@@ -416,8 +416,6 @@ save_classification_image(classification_image, train_tile, train_tile_array, ma
 
 # In[12]: #-------------------MODEL EVALUATION-------------------#
 
-
-
 X_v, y_v, labels_v, roi_v = extract_shapefile_data(validation_path, train_tile, class_prediction, results_txt, attribute, "VALIDATION")
 
 
@@ -475,7 +473,7 @@ if grid_ids:
             filename = temp_file.name
             temp_file.close()  # Close the file so np.memmap can use it
             print(f"Temporary file: {filename}")
-
+    
             # Initialize a memory-mapped array to reduce memory usage
             img_temp = np.memmap(filename, dtype=gdal_array.GDALTypeCodeToNumericTypeCode(train_tile_temp.GetRasterBand(1).DataType),
                             mode='w+', shape=(train_tile_temp.RasterYSize, train_tile_temp.RasterXSize, train_tile_temp.RasterCount))
