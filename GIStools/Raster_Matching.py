@@ -2,6 +2,7 @@ import numpy as np
 import os
 from osgeo import gdal
 import rasterio
+
 def print_res(folder_path):
     """
     Print the resolution, width, and height of all DEM files in a folder.
@@ -168,7 +169,7 @@ def pad_rasters_to_largest(source_rasters_folder, raster_dims = None, pad_value=
         """Finds the largest width and largest height from a list of raster paths."""
         max_width = 0
         max_height = 0
-
+        # Loop through all files in the folder
         for raster_path in rasters_paths:
             with rasterio.open(raster_path) as raster:
                 width, height = raster.width, raster.height
@@ -197,10 +198,10 @@ def pad_rasters_to_largest(source_rasters_folder, raster_dims = None, pad_value=
     for source_raster_path in source_rasters_paths:
         with rasterio.open(source_raster_path) as src:
             src_data = src.read()  # Read all bands
-            src_meta = src.meta
+            src_meta = src.meta # Get the current raster metadata
 
         # Calculate the required padding for height and width
-        pad_height = max(max_height - src_meta['height'], 0)
+        pad_height = max(max_height - src_meta['height'], 0) 
         pad_width = max(max_width - src_meta['width'], 0)
 
         # Check if padding is necessary
@@ -224,22 +225,8 @@ def pad_rasters_to_largest(source_rasters_folder, raster_dims = None, pad_value=
 
          
 def main():
-    folder = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test\Grid_Creation_Test\Tiled_Inputs"
+    folder = r"insert folder path here"
     
-    
-    output = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test\Grid_Creation_Test\Tiled_Inputs\Padded"
-    #Create output folder if it doesn't exist
-    if not os.path.exists(output):
-        os.makedirs(output)
-   
-    #check if there are any NaN values in the raster
-    
-    
-    
-    
-    #pad_rasters_to_largest(folder, pad_value=0)
-    print_res(folder)
-
     
 if __name__ == "__main__":
     main()

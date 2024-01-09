@@ -366,7 +366,7 @@ def main():
     #validation_path_2 = None
     validation_path_2 = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test\Grid_Creation_Test\Validation_2\Validation_2.shp"
     grid_ids = []  # Choose grid IDs to process, or leave empty to process all grid cells
-    process_training_only = True # Set to True to only process the training tile, set to False to process all grid cells
+    process_training_only = False # Set to True to only process the training tile, set to False to process all grid cells
 
     est = 300 # define number of trees that will be used to build random forest (default = 300)
     n_cores = -1 # -1 -> all available computing cores will be used (default = -1)
@@ -393,7 +393,8 @@ def main():
     train_val_grid_id, grid_path, cell_dim = create_grid([training_path,validation_path], DEM_path, in_dir)
     if process_training_only: #preprocess_function will now only process the training tile
         grid_ids.append(train_val_grid_id)
-    
+ 
+    print('Training Grid ID: {}'.format(train_val_grid_id))     
     #Bands output from preprocess function: Roughness, R, G, B, Saturation, Excessive Green Index
     grid_ids = preprocess_SfM_inputs(grid_path, ortho_path, DEM_path, grid_ids, in_dir) #Prepare input stacked rasters for random forest classification
     print('Grid IDs to process: {}'.format(grid_ids))
@@ -419,8 +420,6 @@ def main():
     del train_tile # close the image dataset
 
  
- 
-    
     #-------------------PREDICTION ON MULTIPLE TILES-------------------#
     #Check if there are multiple tiles to process
     if not process_training_only:

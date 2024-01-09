@@ -6,7 +6,17 @@ from osgeo import ogr
 ogr.UseExceptions()
 import math
 
-def create_grid(shapefile_paths, bounding_raster, output_folder, cell_dim=None, bounds_multiplier=1):
+def create_grid(shapefile_paths, bounding_raster, output_folder, bounds_multiplier=1):
+    """
+    Creates a grid of square cells that cover the given shapefiles and bounding raster.
+
+    Args:
+        shapefile_paths (list): Filepaths to the shapefiles to cover.
+        bounding_raster (string): Filepath to the raster associated with the shapefiles.
+        output_folder (string): Folder to save the grid shapefile to.
+        bounds_multiplier (int, optional): Allows user to increase the size of the grid. Use to optimize processing speed by altering chunk size.
+                                            Defaults to 1.
+    """
     
     def find_grid_id(cell_bounds, grid_shapefile):
         """
@@ -80,30 +90,23 @@ def create_grid(shapefile_paths, bounding_raster, output_folder, cell_dim=None, 
         # Load the raster
     #Execute statement if cell_dim is not defined
         
-    if cell_dim is None:
-        # Calculate 10% buffer for each dimension of the cell_bounds
-        buffer_width_x = (cell_bounds[2] - cell_bounds[0]) * 0.1
-        buffer_width_y = (cell_bounds[3] - cell_bounds[1]) * 0.1
-        
-        # Determine the grid cell size - it must be at least as large as the buffered cell_bounds
-        grid_width = (cell_bounds[2] - cell_bounds[0])*math.sqrt(bounds_multiplier) + 2 * buffer_width_x
-        grid_height = (cell_bounds[3] - cell_bounds[1])*math.sqrt(bounds_multiplier) + 2 * buffer_width_y
+    # Calculate 10% buffer for each dimension of the cell_bounds
+    buffer_width_x = (cell_bounds[2] - cell_bounds[0]) * 0.1
+    buffer_width_y = (cell_bounds[3] - cell_bounds[1]) * 0.1
     
-    else:
-        grid_width = cell_dim[0]
-        grid_height = cell_dim[1]
-        buffer_width_x = (cell_bounds[2] - cell_bounds[0]) * 0.1
-        buffer_width_y = (cell_bounds[3] - cell_bounds[1]) * 0.1
-        #check if cell_dim is larger than cell_bounds
+    # Determine the grid cell size - it must be at least as large as the buffered cell_bounds
+    grid_width = (cell_bounds[2] - cell_bounds[0])*math.sqrt(bounds_multiplier) + 2 * buffer_width_x
+    grid_height = (cell_bounds[3] - cell_bounds[1])*math.sqrt(bounds_multiplier) + 2 * buffer_width_y
         
-    with rasterio.open(bounding_raster) as src:
-        raster_bounds = src.bounds
-        raster_crs = src.crs
     
     # Starting from the lower left corner of the cell_bounds
     startx = cell_bounds[0] - buffer_width_x
     starty = cell_bounds[1] - buffer_width_y
 
+    # Get bounds and CRS from the bounding raster
+    with rasterio.open(bounding_raster) as src:
+        raster_bounds = src.bounds
+        raster_crs = src.crs
     
     # Adjust startx/starty to align with the cell_bounds while ensuring coverage beyond the bounding raster
     num_cells_x = math.ceil((raster_bounds.right - startx) / grid_width)
