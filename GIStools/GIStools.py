@@ -18,21 +18,41 @@ import numpy as np
 import geopandas as gpd
 
 
-def calculate_roughness(input_DEM, output_roughness, verbose = False):
-# Open the DEM dataset
+def calculate_roughness(input_DEM, output_roughness, verbose=False):
+    # Open the DEM dataset
     dem_dataset = gdal.Open(input_DEM)
 
     if not dem_dataset:
         print("Failed to open the DEM file.")
     else:
-        # Perform roughness calculation
-        gdal.DEMProcessing(output_roughness, dem_dataset, 'roughness')
+        # Generate roughness dataset
+        gdal.DEMProcessing('temp_roughness.tif', dem_dataset, 'roughness')
 
-        if verbose:
-            print(f"Roughness raster created successfully at: {output_roughness}")
+        # Open the generated roughness dataset
+        roughness_dataset = gdal.Open('temp_roughness.tif')
+        band = roughness_dataset.GetRasterBand(1)
 
-    # Clean up and close the dataset
-    dem_dataset = None
+        # Read the data into a numpy array
+        data = band.ReadAsArray()
+
+        # Apply condition to filter out values greater than 0.5
+        data[data > 0.5] = 0.5
+
+        # Create a new dataset for the filtered output
+        driver = gdal.GetDriverByName('GTiff')
+        out_dataset = driver.Create(output_roughness, roughness_dataset.RasterXSize, roughness_dataset.RasterYSize, 1, band.DataType)
+        out_dataset.SetGeoTransform(roughness_dataset.GetGeoTransform())
+        out_dataset.SetProjection(roughness_dataset.GetProjection())
+
+        # Write the filtered data
+        out_band = out_dataset.GetRasterBand(1)
+        out_band.WriteArray(data)
+
+        # Clean up and close the datasets
+        dem_dataset = None
+        roughness_dataset = None
+        out_dataset = None
+     
     
 def clip_rasters_by_extent(target_raster_paths, template_raster_path, verbose=False):
     """
@@ -410,7 +430,7 @@ def preprocess_SfM_inputs(shapefile_path, ortho_filepath, DEM_filepath, grid_ids
 
         # Step 7: Clip roughness raster by RGB shapefile
         try:
-            clipped_roughness = clip_rasters_by_extent([masked_rasters[grid_id][1]], masked_ortho, verbose=verbose)[0]
+            clipped_roughness = clip_rasters_by_extent([roughness_path], masked_ortho, verbose=verbose)[0]
         #Exception to catch edge cases where the grid cell is empty
         except IndexError:
             print("Tile does not contain data. Continuing to next grid cell.")
@@ -445,11 +465,11 @@ def preprocess_SfM_inputs(shapefile_path, ortho_filepath, DEM_filepath, grid_ids
 
 def main():
     
-    grid_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test\grid.shp"
-    ortho_path = r"Z:\ATD\Drone Data Processing\Metashape Exports\Bennett\ME\11-4-23\GIS\ME_Ortho_1.77cm.tif"
-    DEM_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test\ME_DEM_Initial_Clipped.tif"
-    output_folder = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test"
-    grid_ids = []  # Choose grid IDs to process, or leave empty to process all grid cells
+    grid_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test\Grid_Creation_Test\Tiled_Inputs\Grid\grid.shp"
+    ortho_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test\Grid_Creation_Test\Full_Ortho_Clipped_v1.tif"
+    DEM_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test\Grid_Creation_Test\Full_DEM_Clipped_v1.tif"
+    output_folder = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test\Grid_Creation_Test"
+    grid_ids = [2]  # Choose grid IDs to process, or leave empty to process all grid cells
     
     preprocess_SfM_inputs(grid_path, ortho_path, DEM_path, grid_ids, output_folder)
 
