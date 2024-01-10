@@ -180,13 +180,13 @@ def compute_confusion_matrix(target_raster, classified_raster, results_txt):
     oaa = accuracy_score(y_v, X_v) * 100
     print('OAA = {} %'.format(oaa), file=open(results_txt, "a"))
 
-    return convolution_mat
+    return convolution_mat, sum_mat, oaa
 
 
-shapefile = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Training-Validation Shapes\Archive\Validation\Validation.shp"
-classified_raster_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test\Grid_Creation_Test\Results\Classified_Training_Image.tif"
-output_folder = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Confusion_Matrix_Testing"
-results_txt = r"Confusion_Matrix_test.txt"
+shapefile = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Final Run\Second_Validation_Shapefile\Second_Validation.shp"
+classified_raster_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Final Run\Results\Second_Validation_Results\sieve_Validation_Image.tif"
+output_folder = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Final Run\Results\Second_Validation_Results\Sieve"
+results_txt = r"Sieved_Validation_Results.txt"
 if not os.path.exists(output_folder):
     os.makedirs(output_folder)
 results_out  =  os.path.join(output_folder, results_txt)

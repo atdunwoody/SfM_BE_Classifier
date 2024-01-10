@@ -485,8 +485,8 @@ def main():
         print('Cell dimensions: {}'.format(cell_dim))
         
         #Create validation tile from stitched inputs by extracting the same extent as the training tile using create grid
-        validation_grid_id, validation_grid_path, cell_dim = create_grid([validation_path_2], DEM_path, second_validation)
-
+        validation_grid_id, validation_grid_path, cell_dim = create_grid([validation_path_2, validation_path_2], DEM_path, second_validation)
+        print('Validation Grid ID: {}'.format(validation_grid_id))
         #Preprocessing for validation tile
         validation_tile_path = os.path.join(second_validation, f'stacked_bands_tile_input_{validation_grid_id}.tif')
         preprocess_SfM_inputs(validation_grid_path, ortho_path, DEM_path, [validation_grid_id], second_validation)
