@@ -1,30 +1,136 @@
-import os
+import os, tempfile
 gdal_data_path = 'C:/ProgramData/miniconda3/envs/GIStools/Library/share/gdal'
 os.environ['GDAL_DATA'] = gdal_data_path
 from osgeo import  gdal, ogr, gdal_array 
 gdal.UseExceptions()
 gdal.AllRegister()
 
-from sklearn.metrics import confusion_matrix
-import numpy as np
 from sklearn.metrics import confusion_matrix, precision_score, recall_score
-import pandas as pd
-
-import numpy as np # math and array handling
-import matplotlib.pyplot as plt # plot figures
-
 import pandas as pd # handling large data as table sheets
 from sklearn.metrics import classification_report, accuracy_score
 
+from osgeo import gdal, ogr
+import numpy as np
+from osgeo import gdal, ogr
+import rasterio
+from rasterio.features import rasterize
+from rasterio.transform import from_origin
+
+#import all functions from Mask_Raster_by_Shapefile_Bounds
+from Mask_Raster_by_Shapefile_Bounds import get_layer_extent
+
+from rasterio.mask import mask
+from rasterio.windows import from_bounds
+
+def clip_raster_by_bounds(input_raster_path, output_folder, template_bounds):
+    """
+    Clip a raster file to the specified bounds.
+
+    :param input_raster_path: Path to the input raster file.
+    :param output_raster_path: Path to the output clipped raster file.
+    :param bounds: A tuple of (min_x, min_y, max_x, max_y) representing the bounding box.
+    """
+    output_path = os.path.join(output_folder, 'Clipped_Raster.tif')
+    with rasterio.open(input_raster_path) as input_raster:
+        
+        window = from_bounds(*template_bounds, input_raster.transform)
+        # Read the data from this window
+        clipped_array = input_raster.read(window=window)
+
+        # Check if the clipped array has an extra dimension and remove it if present
+        if clipped_array.ndim == 3 and clipped_array.shape[0] == 1:
+            clipped_array = clipped_array.squeeze()
+
+        # Update metadata for the clipped raster
+        out_meta = input_raster.meta.copy()
+        out_meta.update({
+            "height": clipped_array.shape[0],
+            "width": clipped_array.shape[1],
+            "transform": rasterio.windows.transform(window, input_raster.transform)
+        })
+
+        # Generate the output path
+
+        # Save the clipped raster
+        with rasterio.open(output_path, "w", **out_meta) as dest:
+            dest.write(clipped_array, 1)
+
+        return output_path
+
+def extract_image_data(raster_path, results_txt):
+    print('Extracting image data from: {}'.format(raster_path))
+    raster = gdal.Open(raster_path, gdal.GA_ReadOnly)
+
+    temp_file = tempfile.NamedTemporaryFile(delete=False)
+    filename = temp_file.name
+    temp_file.close()  # Close the file so np.memmap can use it
+
+    raster_3Darray = np.memmap(filename, dtype=gdal_array.GDALTypeCodeToNumericTypeCode(raster.GetRasterBand(1).DataType),
+                mode='w+', shape=(raster.RasterYSize, raster.RasterXSize, raster.RasterCount))
+    for b in range(raster_3Darray.shape[2]):
+        raster_3Darray[:, :, b] = raster.GetRasterBand(b + 1).ReadAsArray()
+
+    row = raster.RasterYSize
+    col = raster.RasterXSize
+    band_number = raster.RasterCount
+
+    print('Image extent: {} x {} (row x col)'.format(row, col))
+    print('Number of Bands: {}'.format(band_number))
+    print('Image extent: {} x {} (row x col)'.format(row, col), file=open(results_txt, "a"))
+    print('Number of Bands: {}'.format(band_number), file=open(results_txt, "a"))
+
+    return raster, raster_3Darray
+
+def burn_shapefile_into_raster(shapefile, raster, output_folder, raster_3Darray, results_txt, attribute):
+    # Open the reference raster
+    output_raster_path = os.path.join(output_folder, 'Rasterized_Validation.tif')
+    
+    shape_dataset = ogr.Open(shapefile)
+    shape_layer = shape_dataset.GetLayer()
+
+    mem_drv = gdal.GetDriverByName('MEM')
+    mem_raster = mem_drv.Create('', raster.RasterXSize, raster.RasterYSize, 1, gdal.GDT_UInt16)
+    mem_raster.SetProjection(raster.GetProjection())
+    mem_raster.SetGeoTransform(raster.GetGeoTransform())
+    mem_band = mem_raster.GetRasterBand(1)
+    mem_band.Fill(0)
+    mem_band.SetNoDataValue(0)
+
+    att_ = 'ATTRIBUTE=' + attribute
+    err = gdal.RasterizeLayer(mem_raster, [1], shape_layer, None, None, [1], [att_, "ALL_TOUCHED=TRUE"])
+    assert err == gdal.CE_None
+
+    roi = mem_raster.ReadAsArray()
+    try:
+        X = raster_array[roi > 0, :]
+    except IndexError:
+        X = raster_array[roi > 0]
+    y = roi[roi > 0]
+    n_samples = (roi > 0).sum()
+    labels = np.unique(roi[roi > 0])
+    
+    
+    #Save the rasterized validation shapefile
+    gdal.Warp(output_raster_path, mem_raster, format='GTiff')
+    
+    
+    with open(results_txt, "a") as file:
+        print('------------------------------------', file=file)
+        print('VALIDATION', file=file)
+        
+        print('{n} validation pixels'.format(n=n_samples), file=file)
+        print('validation data include {n} classes: {classes}'.format(n=labels.size, classes=labels), file=file)
+                
+    return output_raster_path
 
 
-def compute_confusion_matrix(target_raster, img_RS, results_txt):
+def compute_confusion_matrix(target_raster, classified_raster, results_txt):
     """
     Compute a confusion matrix and print it to a text file.
 
     Args:
         target_raster (str): Filepath to the rasterized validation shapefile. Should contain labels that correspond to the classified raster.
-        img_RS (str): Filepath to the classified raster
+        classified_raster (str): Filepath to the classified raster
         results_txt (str): Filepath to the text file to print the confusion matrix to. 
 
     Returns:
@@ -32,13 +138,13 @@ def compute_confusion_matrix(target_raster, img_RS, results_txt):
     """
     
     #Print input parameters to txt file
-    print('Reference raster: {}'.format(img_RS), file=open(results_txt, "a"))
+    print('Reference raster: {}'.format(classified_raster), file=open(results_txt, "a"))
     print('Target raster: {}'.format(target_raster), file=open(results_txt, "a"))
     #Print a new line that labels the start of the confusion matrix
     print('----------Confusion Matrix:----------------', file=open(results_txt, "a"))
     
     # Open the reference raster for reading
-    ref_ds = gdal.Open(img_RS, gdal.GA_ReadOnly)
+    ref_ds = gdal.Open(classified_raster, gdal.GA_ReadOnly)
     ref_img = ref_ds.ReadAsArray()
 
     # Open the target raster for validation
@@ -77,14 +183,20 @@ def compute_confusion_matrix(target_raster, img_RS, results_txt):
     return convolution_mat
 
 
-
-ref_raster = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Results\Results_Auto_Multiple\Sieved\sieve_32_8conME_classified_masked_38.tif"
-target_raster = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Results\Results_expanded_shapes - v2\Training-Validation Shapes\Validation_Raster.tif"
-output_folder = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Classification_Florian\Test_v1\Test 12 Grid\Results\Results_Auto_Multiple\Sieved"
-results_txt_file = r"Confusion_Matrix_32_8con.txt"
-results_out  =  os.path.join(output_folder, results_txt_file)
-#Create output folder if it doesn't exist
+shapefile = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Training-Validation Shapes\Archive\Validation\Validation.shp"
+classified_raster_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test\Grid_Creation_Test\Results\Classified_Training_Image.tif"
+output_folder = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Confusion_Matrix_Testing"
+results_txt = r"Confusion_Matrix_test.txt"
 if not os.path.exists(output_folder):
     os.makedirs(output_folder)
+results_out  =  os.path.join(output_folder, results_txt)
+#Create output folder if it doesn't exist
+attribute = 'id'
 
-print(compute_confusion_matrix(target_raster, ref_raster,results_out))
+bounds = get_layer_extent(shapefile)
+ref_raster = clip_raster_by_bounds(classified_raster_path, output_folder, bounds)
+raster, raster_array = extract_image_data(ref_raster, results_txt)
+
+target_raster = burn_shapefile_into_raster(shapefile, raster, output_folder, raster_array, results_txt, attribute)
+
+print(compute_confusion_matrix(target_raster, ref_raster, results_out))

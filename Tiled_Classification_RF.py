@@ -84,7 +84,7 @@ def print_attributes(shapefile):
     return attribute_names
  #-------------------PREPARING RESULTS TEXT FILE-------------------#
 
-def print_header(results_txt, train_tile_path, training_path, validation_path, img_path_list, attribute):
+def print_header(results_txt, dem_path, ortho_path, train_tile_path, training_path, validation_path, img_path_list, attribute):
 #Overwrite if there is an existing file
     if os.path.exists(results_txt):
         os.remove(results_txt)
@@ -92,6 +92,8 @@ def print_header(results_txt, train_tile_path, training_path, validation_path, i
     print('Processing Start: {}'.format(datetime.datetime.now()), file=open(results_txt, "a"))
     print('-------------------------------------------------', file=open(results_txt, "a"))
     print('PATHS:', file=open(results_txt, "a"))
+    print('DEM: {}'.format(dem_path), file=open(results_txt, "a"))
+    print('Orthomosaic: {}'.format(ortho_path), file=open(results_txt, "a"))
     print('Training Tile: {}'.format(train_tile_path), file=open(results_txt, "a"))
     print('Training shape: {}'.format(training_path) , file=open(results_txt, "a"))
     print('Vaildation shape: {}'.format(validation_path) , file=open(results_txt, "a"))
@@ -101,23 +103,23 @@ def print_header(results_txt, train_tile_path, training_path, validation_path, i
     print('-------------------------------------------------', file=open(results_txt, "a"))
 
 #-------------------IMAGE DATA EXTRACTION-------------------#
-def extract_image_data(image_path, results_txt, est=None, log=False):
-    print('Extracting image data from: {}'.format(image_path))
-    img_tile = gdal.Open(image_path, gdal.GA_ReadOnly)
+def extract_image_data(raster_path, results_txt, est=None, log=False):
+    print('Extracting image data from: {}'.format(raster_path))
+    raster = gdal.Open(raster_path, gdal.GA_ReadOnly)
 
     temp_file = tempfile.NamedTemporaryFile(delete=False)
     filename = temp_file.name
     temp_file.close()  # Close the file so np.memmap can use it
 
-    img_tile_array = np.memmap(filename, dtype=gdal_array.GDALTypeCodeToNumericTypeCode(img_tile.GetRasterBand(1).DataType),
-                mode='w+', shape=(img_tile.RasterYSize, img_tile.RasterXSize, img_tile.RasterCount))
-    for b in range(img_tile_array.shape[2]):
-        img_tile_array[:, :, b] = img_tile.GetRasterBand(b + 1).ReadAsArray()
+    raster_3Darray = np.memmap(filename, dtype=gdal_array.GDALTypeCodeToNumericTypeCode(raster.GetRasterBand(1).DataType),
+                mode='w+', shape=(raster.RasterYSize, raster.RasterXSize, raster.RasterCount))
+    for b in range(raster_3Darray.shape[2]):
+        raster_3Darray[:, :, b] = raster.GetRasterBand(b + 1).ReadAsArray()
 
     
-    row = img_tile.RasterYSize
-    col = img_tile.RasterXSize
-    band_number = img_tile.RasterCount
+    row = raster.RasterYSize
+    col = raster.RasterXSize
+    band_number = raster.RasterCount
 
 
     if log:
@@ -130,7 +132,7 @@ def extract_image_data(image_path, results_txt, est=None, log=False):
         print('---------------------------------------', file=open(results_txt, "a"))
         print('TRAINING', file=open(results_txt, "a"))
         print('Number of Trees: {}'.format(est), file=open(results_txt, "a"))
-    return img_tile, img_tile_array
+    return raster, raster_3Darray
 
 #-------------------TRAINING DATA EXTRACTION FROM SHAPEFILE-------------------#
 
@@ -301,18 +303,18 @@ def reshape_and_mask_prediction(class_prediction, raster_3Darray):
     return masked_prediction
 
 #--------------SAVE CLASSIFICATION IMAGE-----------------#
-def save_classification_image(classification_image, raster, raster_3Darray, masked_prediction):
+def save_classification_image(save_path, raster, raster_3Darray, masked_prediction):
     cols = raster_3Darray.shape[1]
     rows = raster_3Darray.shape[0]
 
     masked_prediction.astype(np.float16)
     driver = gdal.GetDriverByName("gtiff")
-    outdata = driver.Create(classification_image, cols, rows, 1, gdal.GDT_UInt16) # Create empty image with input raster dimensions
+    outdata = driver.Create(save_path, cols, rows, 1, gdal.GDT_UInt16) # Create empty image with input raster dimensions
     outdata.SetGeoTransform(raster.GetGeoTransform())##sets same geotransform as input
     outdata.SetProjection(raster.GetProjection())##sets same projection as input
     outdata.GetRasterBand(1).WriteArray(masked_prediction)
     outdata.FlushCache() ##saves to disk
-    print('Image saved to: {}'.format(classification_image))
+    print('Image saved to: {}'.format(save_path))
 
 def model_evaluation(X_v, y_v, labels, roi_v, class_prediction, results_txt):
     # Cross-tabulate predictions 
@@ -408,7 +410,7 @@ def main():
     attribute_names = print_attributes(training_path) # print the attributes in the training shapefile
     train_tile_path = os.path.join(in_dir, f'stacked_bands_tile_input_{train_val_grid_id}.tif') # grid-clipped-image containing the training data
     results_txt = os.path.join(output_folder, 'Results_Summary.txt') # directory, where the all meta results will be saved
-    print_header(results_txt, train_tile_path, training_path, validation_path, img_path_list, attribute) # print the header for the results text file
+    print_header(results_txt, DEM_path, ortho_path, train_tile_path, training_path, validation_path, img_path_list, attribute) # print the header for the results text file
     train_tile, train_tile_3Darray = extract_image_data(train_tile_path, results_txt, est, log=True) # extract the training tile image data
     # Extract training data from shapefile
     X_train, y_train, labels, roi = extract_shapefile_data(training_path, train_tile, train_tile_3Darray, results_txt, attribute, "TRAINING")
@@ -468,8 +470,10 @@ def main():
             os.remove(stitched_raster_path)
         stitch_rasters(classified_tile_folder, stitched_raster_path)  
 
+    
+    #------------------SECOND VALIDATION FILE------------------#
     if validation_path_2 is not None:
-        #------------------SECOND VALIDATION FILE------------------#
+        
         #print second results header in results text file
         print('-------------------------------------------------', file=open(results_txt, "a"))
         print('SECOND VALIDATION', file=open(results_txt, "a"))
@@ -479,15 +483,15 @@ def main():
             os.makedirs(second_validation)
         print('Second validation being processed in: {}'.format(second_validation))
         print('Cell dimensions: {}'.format(cell_dim))
+        
         #Create validation tile from stitched inputs by extracting the same extent as the training tile using create grid
-        print(len(validation_path_2))
         validation_grid_id, validation_grid_path, cell_dim = create_grid([validation_path_2], DEM_path, second_validation)
-        print('Validation Grid ID: {}'.format(validation_grid_id))
+
+        #Preprocessing for validation tile
         validation_tile_path = os.path.join(second_validation, f'stacked_bands_tile_input_{validation_grid_id}.tif')
-        #run preprocess function on validation tile
         preprocess_SfM_inputs(validation_grid_path, ortho_path, DEM_path, [validation_grid_id], second_validation)
-        print('Preprocessing complete')
         pad_rasters_to_largest(second_validation, raster_dims)
+        
         validation_tile, validation_tile_3Darray = extract_image_data(validation_tile_path, results_txt, est, log=True)
         # Run prediction on validation tile
         validation_tile_2Darray = flatten_raster_bands(validation_tile_3Darray)
@@ -495,12 +499,15 @@ def main():
         validation_masked_prediction = reshape_and_mask_prediction(validation_class_prediction, validation_tile_3Darray)
         validation_image = os.path.join(second_validation, f"Validation_Image.tif")
         save_classification_image(validation_image, validation_tile, validation_tile_3Darray, validation_masked_prediction)
+        
         # Extract validation data from shapefile
         X_v, y_v, labels_v, roi_v = extract_shapefile_data(validation_path_2, validation_tile, validation_class_prediction, results_txt, attribute, "VALIDATION")
         model_evaluation(X_v, y_v, labels_v, roi_v, validation_class_prediction, results_txt) # evaluate the model using the validation data
         
-    
+
     
 if __name__ == '__main__':
     main()
     
+
+# %%

@@ -85,10 +85,11 @@ def mask_rasters_by_shapefile(raster_paths, shapefile_path, output_folder, id_va
     """
     Mask a list of rasters by different polygons specified by id_values from a single shapefile. 
     Entire bounds of shapefile will not be used, only the portions of the raster within bounds of the polygons with the specified id_values will be retained.
-
+    This function can be used in conjunction with Grid_Creation.create_grid() to split a raster into multiple smaller rasters.
+    
     Parameters:
-    raster_paths (list of str): List of file paths to the raster files.
-    shapefile_path (str): File path to the shapefile.
+    raster_paths (list of str): List of file paths of rasters to be masked.
+    shapefile_path (str): File path to the masking shapefile.
     output_folder (str): Folder path to save the masked rasters.
     id_values (list of int/str): List of id values to use for masking from the shapefile.
     id_field (str): Field name in the shapefile containing the IDs.
@@ -230,7 +231,7 @@ def stack_bands(input_raster_list, output_path=None, suffix = None, verbose=Fals
         band = raster_ds.GetRasterBand(1)
         out_ds.GetRasterBand(i).WriteArray(band.ReadAsArray())
         if verbose:
-            print(f"Band {i} of ", len(input_raster_list), " stacked " "Path: ", raster_path)   
+            print(f"Band {i} of ", len(input_raster_list), "stacked.")   
 
     # Close datasets
     src_ds = None
@@ -378,31 +379,30 @@ def preprocess_SfM_inputs(shapefile_path, ortho_filepath, DEM_filepath, grid_ids
         grid_ids = gpd.read_file(shapefile_path)['id'].tolist()
     
     for grid_id in grid_ids:
-        #Print update on progress using actual iteration number instead of grid_id
-        print(f"Processing grid cell {grid_ids.index(grid_id) + 1} of {len(grid_ids)}")
-        
         # Step 1: Create a subfolder for each grid ID
         grid_output_folder = os.path.join(output_folder, f'Grid_{grid_id}')
         Path(grid_output_folder).mkdir(parents=True, exist_ok=True)
+        #Print update on progress using actual iteration number instead of grid_id
+        print(f"Processing grid cell {grid_ids.index(grid_id) + 1} of {len(grid_ids)}")
         
+        # Step 2: Mask ortho and roughness rasters by shapefile
+        masked_rasters = mask_rasters_by_shapefile([ortho_filepath, DEM_filepath], shapefile_path, grid_output_folder, [grid_id], verbose=verbose)
+        masked_ortho = masked_rasters[grid_id][0]  
+        masked_DEM = masked_rasters[grid_id][1]  
         
-        #Step 2: Create roughness raster
+        #Step 3: Create roughness raster
         roughness_path = os.path.join(grid_output_folder, 'roughness.tif')
-        calculate_roughness(DEM_filepath, roughness_path, verbose=verbose)
+        calculate_roughness(masked_DEM, roughness_path, verbose=verbose)
         
-        # Step 3: Mask ortho and roughness rasters by shapefile
-        masked_rasters = mask_rasters_by_shapefile([ortho_filepath, roughness_path], shapefile_path, grid_output_folder, [grid_id], verbose=verbose)
-        masked_ortho = masked_rasters[grid_id][0]  # Assuming ortho raster is first in the list
-
         # Step 4: Split bands of the ortho raster
-       
         rgb_bands = split_bands(masked_ortho, 'ortho', grid_output_folder, pop =True)
         if verbose:
             print("Proccessing RGB Bands...")
             
-        # Step 5: Process RGB bands
+        # Step 5: Create EGI and Saturation rasters
         processed_rgb = processRGB(rgb_bands, verbose=verbose)
-        # Step 6: Append processed RGB to list
+        
+        # Step 6: Append EGI and Saturation rasters to RGB raster list
         rgb_bands.extend(processed_rgb)
         rasters_to_stack = rgb_bands
         if verbose:
@@ -411,27 +411,27 @@ def preprocess_SfM_inputs(shapefile_path, ortho_filepath, DEM_filepath, grid_ids
         # Step 7: Clip roughness raster by RGB shapefile
         try:
             clipped_roughness = clip_rasters_by_extent([masked_rasters[grid_id][1]], masked_ortho, verbose=verbose)[0]
-        #IndexError exception
+        #Exception to catch edge cases where the grid cell is empty
         except IndexError:
             print("Tile does not contain data. Continuing to next grid cell.")
             shutil.rmtree(grid_output_folder)
-            #delete grid ID from list of grid IDs to process
+            #Delete grid ID from list of grid IDs to process
             grid_ids.remove(grid_id)
             continue
-        # Step 8: Match DEM resolution
+        
+        # Step 8: Match DEM resolution to ortho resolution
         matched_roughness_path = os.path.join(grid_output_folder, 'matched_roughness.tif')
         match_dem_resolution(clipped_roughness, masked_ortho, matched_roughness_path, verbose=verbose)
         matched_roughness_path = [matched_roughness_path]
+        
         # Step 9: Append roughness to raster list
         matched_roughness_path.extend(rasters_to_stack)
 
-        # Step 10: Stack bands
-
+        # Step 10: Stack bands all bands into single raster
         if not os.path.exists(output_folder):
             os.makedirs(output_folder)
         stacked_output = stack_bands(matched_roughness_path, output_folder, suffix = grid_id, verbose=verbose)
 
-        outputs[grid_id] = stacked_output
         #Close datasets
         masked_rasters = None
         processed_rgb = None

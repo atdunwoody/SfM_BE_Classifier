@@ -179,8 +179,6 @@ def pad_rasters_to_largest(source_rasters_folder, raster_dims = None, verbose = 
                     max_height = height
 
         return max_width, max_height
-    if verbose:
-        print('Padding rasters to largest dimension')
         
     source_rasters_paths = []
     # Create list of all .tif filepaths in the folder
@@ -188,7 +186,14 @@ def pad_rasters_to_largest(source_rasters_folder, raster_dims = None, verbose = 
         file_path = os.path.join(source_rasters_folder, filename)
         if file_path.lower().endswith('.tif'):
             source_rasters_paths.append(file_path)
-
+    #skip function if less than two rasters
+    if len(source_rasters_paths) < 2 and raster_dims is None:
+        print('Less than two rasters in folder. Skipping padding.')
+        return None
+        
+    if verbose:
+        print('Padding rasters to largest dimension')
+    
     # Find the largest dimensions among all rasters
     if raster_dims is None: 
         max_width, max_height = find_largest_dimensions(source_rasters_paths)
