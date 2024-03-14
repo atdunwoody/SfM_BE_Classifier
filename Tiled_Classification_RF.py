@@ -362,7 +362,7 @@ def main():
     # Training and Validation shapefiles should be labeled with a single, NON ZERO  attribute that identifies bare earth and vegetation.
     training_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Training-Validation Shapes\Updated Shapes\Training.shp"  # 0 = No Data
     validation_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Training-Validation Shapes\Updated Shapes\Validation.shp"  # 0 = No Data
-    attribute = 'id' # attribute name in training & validation shapefiles that labels bare earth & vegetation 
+    attribute = 'cover' # attribute name in training & validation shapefiles that labels bare earth & vegetation 
     #-------------------Optional User Defined Classification Parameters-------------------#
     #Option to process an additional validation shapefile outside of the training grid cell. Set to None to skip second validation.
     #validation_path_2 = None
