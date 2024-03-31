@@ -26,7 +26,7 @@ import os, tempfile
 from osgeo import gdal, ogr, gdal_array # I/O image data
 import numpy as np # math and array handling
 import matplotlib.pyplot as plt # plot figures
-from sklearn.ensemble import RandomForestClassifier # classifier
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier # machine learning classifiers
 import pandas as pd # handling large data as table sheets
 from sklearn.metrics import classification_report, accuracy_score,confusion_matrix  # calculating measures for accuracy assessment
 
@@ -244,6 +244,41 @@ def train_RF(X, y, train_tile, results_txt, est, n_cores, verbose):
     plt.ylabel('classes - truth')
     return rf, rf2
 
+def train_GB(X, y, train_tile, results_txt, est, n_cores, verbose):
+    if verbose:
+        verbose = 2
+    else:
+        verbose = 0
+
+    gb = GradientBoostingClassifier(n_estimators=est, verbose=verbose)
+    X = np.nan_to_num(X)
+    gb_model = gb.fit(X, y)
+
+    print('--------------------------------', file=open(results_txt, "a"))
+    print('TRAINING and GB Model Diagnostics:', file=open(results_txt, "a"))
+
+    # Show feature importance
+    bands = range(1, train_tile.RasterCount + 1)
+    for b, imp in zip(bands, gb_model.feature_importances_):
+        print('Band {b} importance: {imp}'.format(b=b, imp=imp))
+        print('Band {b} importance: {imp}'.format(b=b, imp=imp), file=open(results_txt, "a"))
+
+    try:
+        df = pd.DataFrame()
+        df['truth'] = y
+        df['predict'] = gb_model.predict(X)
+    except MemoryError:
+        print('Crosstab not available')
+    else:
+        print(pd.crosstab(df['truth'], df['predict'], margins=True))
+        print(pd.crosstab(df['truth'], df['predict'], margins=True), file=open(results_txt, "a"))
+
+    cm = confusion_matrix(y, gb_model.predict(X))
+    plt.figure(figsize=(10,7))
+    sn.heatmap(cm, annot=True, fmt='g')
+    plt.xlabel('classes - predicted')
+    plt.ylabel('classes - truth')
+    return gb_model
 #-------------------PREDICTION ON TRAINING IMAGE-------------------#
 def flatten_raster_bands(raster_3Darray):
     # Flatten multiple raster bands (3D array) into 2D array for classification
@@ -503,9 +538,7 @@ def main():
         # Extract validation data from shapefile
         X_v, y_v, labels_v, roi_v = extract_shapefile_data(validation_path_2, validation_tile, validation_class_prediction, results_txt, attribute, "VALIDATION")
         model_evaluation(X_v, y_v, labels_v, roi_v, validation_class_prediction, results_txt) # evaluate the model using the validation data
-        
-
-    
+            
 if __name__ == '__main__':
     main()
     
