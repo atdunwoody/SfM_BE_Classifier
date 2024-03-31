@@ -266,19 +266,19 @@ def train_GB(X, y, train_tile, results_txt, est, n_cores, verbose):
     try:
         df = pd.DataFrame()
         df['truth'] = y
-        df['predict'] = gb_model.predict(X)
+        df['predict'] = gb.predict(X)
     except MemoryError:
         print('Crosstab not available')
     else:
         print(pd.crosstab(df['truth'], df['predict'], margins=True))
         print(pd.crosstab(df['truth'], df['predict'], margins=True), file=open(results_txt, "a"))
 
-    cm = confusion_matrix(y, gb_model.predict(X))
+    cm = confusion_matrix(y, gb.predict(X))
     plt.figure(figsize=(10,7))
     sn.heatmap(cm, annot=True, fmt='g')
     plt.xlabel('classes - predicted')
     plt.ylabel('classes - truth')
-    return gb_model
+    return gb, gb_model
 #-------------------PREDICTION ON TRAINING IMAGE-------------------#
 def flatten_raster_bands(raster_3Darray):
     # Flatten multiple raster bands (3D array) into 2D array for classification
@@ -381,12 +381,8 @@ def model_evaluation(X_v, y_v, labels, roi_v, class_prediction, results_txt):
     plt.xlabel('classes - predicted')
     plt.ylabel('classes - truth')
 
-   
-
-def main():
-    #-------------------Required User Defined Inputs-------------------#
-
-    #Path to orthomosaic and DEM from SfM processing
+def run_workflow():
+        #Path to orthomosaic and DEM from SfM processing
     ortho_path = r"Z:\ATD\Drone Data Processing\Metashape Exports\Bennett\ME\11-4-23\ME_Ortho_Spring2023_v1.tif"
     DEM_path = r"Z:\ATD\Drone Data Processing\Metashape Exports\Bennett\ME\11-4-23\ME_DEM_Spring2023_3.54cm.tif"
 
@@ -539,6 +535,11 @@ def main():
         X_v, y_v, labels_v, roi_v = extract_shapefile_data(validation_path_2, validation_tile, validation_class_prediction, results_txt, attribute, "VALIDATION")
         model_evaluation(X_v, y_v, labels_v, roi_v, validation_class_prediction, results_txt) # evaluate the model using the validation data
             
+   
+
+def main():
+    #-------------------Required User Defined Inputs-------------------#
+    pass
 if __name__ == '__main__':
     main()
     
