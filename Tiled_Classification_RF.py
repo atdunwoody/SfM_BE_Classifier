@@ -29,7 +29,7 @@ import matplotlib.pyplot as plt # plot figures
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier # machine learning classifiers
 import pandas as pd # handling large data as table sheets
 from sklearn.metrics import classification_report, accuracy_score,confusion_matrix  # calculating measures for accuracy assessment
-
+from joblib import dump, load
 import seaborn as sn
 
 import datetime
@@ -102,6 +102,32 @@ def print_header(results_txt, dem_path, ortho_path, train_tile_path, training_pa
     print('Report text file: {}'.format(results_txt) , file=open(results_txt, "a"))
     print('-------------------------------------------------', file=open(results_txt, "a"))
 
+def print_header_params(results_txt, params):
+#Overwrite if there is an existing file
+    if os.path.exists(results_txt):
+        os.remove(results_txt)
+    print('Random Forest Classification', file=open(results_txt, "a"))
+    print('Processing Start: {}'.format(datetime.datetime.now()), file=open(results_txt, "a"))
+    print('-------------------------------------------------', file=open(results_txt, "a"))
+    print('PATHS:', file=open(results_txt, "a"))
+    print('DEM: {}'.format(params.DEM_path), file=open(results_txt, "a"))
+    print('Orthomosaic: {}'.format(params.ortho_path), file=open(results_txt, "a"))
+    print('Training shape: {}'.format(params.training_path) , file=open(results_txt, "a"))
+    print('Vaildation shape: {}'.format(params.validation_path) , file=open(results_txt, "a"))
+    print('      choosen attribute: {}'.format(params.attribute) , file=open(results_txt, "a"))
+    print('Output Folder: {}'.format(params.output_folder) , file=open(results_txt, "a"))
+    print('Grid Path: {}'.format(params.grid_path) , file=open(results_txt, "a"))
+    print('Grid IDs: {}'.format(params.grid_ids) , file=open(results_txt, "a"))
+    print('Stitch Output Rasters: {}'.format(params.stitch) , file=open(results_txt, "a"))
+    print('-------------------------------------------------', file=open(results_txt, "a"))
+    print('Random Forest Parameters:', file=open(results_txt, "a"))
+    print('Saved Model Path: {}'.format(params.model_path) , file=open(results_txt, "a"))
+    print('Process Training Only: {}'.format(params.process_training_only) , file=open(results_txt, "a"))
+    print('Estimators: {}'.format(params.est) , file=open(results_txt, "a"))
+    print('Number of Cores: {}'.format(params.n_cores) , file=open(results_txt, "a"))
+    print('Gradient Boosting: {}'.format(params.gradient_boosting) , file=open(results_txt, "a"))
+    print('-------------------------------------------------', file=open(results_txt, "a"))
+
 #-------------------IMAGE DATA EXTRACTION-------------------#
 def extract_image_data(raster_path, results_txt, est=None, log=False):
     print('Extracting image data from: {}'.format(raster_path))
@@ -163,7 +189,8 @@ def extract_shapefile_data(shapefile, raster, raster_array, results_txt, attribu
         y = roi[roi > 0]
         n_samples = (roi > 0).sum()
         labels = np.unique(roi[roi > 0])
-
+        print(f"Unique labels values: {labels}")
+        print(f"Unique y values: {np.unique(y)}")
         return X, y, labels, n_samples, roi
     
     # Subfunction to print information
@@ -197,22 +224,34 @@ def extract_shapefile_data(shapefile, raster, raster_array, results_txt, attribu
     return X, y, labels, roi
 
 #--------------------Train Random Forest & RUN MODEL DIAGNOSTICS-----------------#
-def train_RF(X, y, train_tile, results_txt, est, n_cores, verbose):
+def train_RF(X, y, train_tile, results_txt, model_save_dir, est = 100, n_cores = -1, gradient_boosting = False, verbose = False):
+    
+
     if verbose:
-        # verbose = 2 -> prints out every tree progression
-        verbose = 2
+        verbose = 2  # verbose = 2 -> prints out every tree progression
     else:
         verbose = 0
-    
-    rf = RandomForestClassifier(n_estimators=est, oob_score=True, verbose=verbose, n_jobs=n_cores)
+
+    if gradient_boosting:
+        print('Training Gradient Boosting Classifier')
+        from xgboost import XGBClassifier
+        y = y - 1  # XGBoost requires class labels to start at 0
+        rf = XGBClassifier(n_estimators=est, verbosity=verbose, n_jobs=n_cores)
+    else:
+        print('Training Random Forest Classifier')
+        rf = RandomForestClassifier(n_estimators=est, oob_score=True, verbose=verbose, n_jobs=n_cores)
+        print('--------------------------------', file=open(results_txt, "a"))
+        print('TRAINING and RF Model Diagnostics:', file=open(results_txt, "a"))
+        print('OOB prediction of accuracy is: {oob}%'.format(oob=rf.oob_score_ * 100))
+        print('OOB prediction of accuracy is: {oob}%'.format(oob=rf.oob_score_ * 100), file=open(results_txt, "a"))
     X = np.nan_to_num(X)
     rf2 = rf.fit(X, y)
 
-    print('--------------------------------', file=open(results_txt, "a"))
-    print('TRAINING and RF Model Diagnostics:', file=open(results_txt, "a"))
-    print('OOB prediction of accuracy is: {oob}%'.format(oob=rf.oob_score_ * 100))
-    print('OOB prediction of accuracy is: {oob}%'.format(oob=rf.oob_score_ * 100), file=open(results_txt, "a"))
-
+    # Save the model to a file
+    model_filename = os.path.join(model_save_dir, 'RF_Model.joblib')
+    dump(rf2, model_filename)
+    print(f"Model saved to {model_filename}")
+    
     # Show band importance:
     bands = range(1,train_tile.RasterCount+1)
 
@@ -244,41 +283,7 @@ def train_RF(X, y, train_tile, results_txt, est, n_cores, verbose):
     plt.ylabel('classes - truth')
     return rf, rf2
 
-def train_GB(X, y, train_tile, results_txt, est, n_cores, verbose):
-    if verbose:
-        verbose = 2
-    else:
-        verbose = 0
 
-    gb = GradientBoostingClassifier(n_estimators=est, verbose=verbose)
-    X = np.nan_to_num(X)
-    gb_model = gb.fit(X, y)
-
-    print('--------------------------------', file=open(results_txt, "a"))
-    print('TRAINING and GB Model Diagnostics:', file=open(results_txt, "a"))
-
-    # Show feature importance
-    bands = range(1, train_tile.RasterCount + 1)
-    for b, imp in zip(bands, gb_model.feature_importances_):
-        print('Band {b} importance: {imp}'.format(b=b, imp=imp))
-        print('Band {b} importance: {imp}'.format(b=b, imp=imp), file=open(results_txt, "a"))
-
-    try:
-        df = pd.DataFrame()
-        df['truth'] = y
-        df['predict'] = gb.predict(X)
-    except MemoryError:
-        print('Crosstab not available')
-    else:
-        print(pd.crosstab(df['truth'], df['predict'], margins=True))
-        print(pd.crosstab(df['truth'], df['predict'], margins=True), file=open(results_txt, "a"))
-
-    cm = confusion_matrix(y, gb.predict(X))
-    plt.figure(figsize=(10,7))
-    sn.heatmap(cm, annot=True, fmt='g')
-    plt.xlabel('classes - predicted')
-    plt.ylabel('classes - truth')
-    return gb, gb_model
 #-------------------PREDICTION ON TRAINING IMAGE-------------------#
 def flatten_raster_bands(raster_3Darray):
     # Flatten multiple raster bands (3D array) into 2D array for classification
@@ -351,18 +356,16 @@ def save_classification_image(save_path, raster, raster_3Darray, masked_predicti
     outdata.FlushCache() ##saves to disk
     print('Image saved to: {}'.format(save_path))
 
-def model_evaluation(X_v, y_v, labels, roi_v, class_prediction, results_txt):
+def model_evaluation(X_v, y_v, labels, roi_v, class_prediction, 
+                     results_txt, gradient_boosting = False):
     # Cross-tabulate predictions 
+    if gradient_boosting:
+        y_v = y_v - 1  # XGBoost requires class labels to start at 0
+        labels = labels - 1
     convolution_mat = pd.crosstab(y_v, X_v, margins=True)
     print(convolution_mat)
     print(convolution_mat, file=open(results_txt, "a"))
-    # if you want to save the confusion matrix as a CSV file:
-    #savename = 'C:\\save\\to\\folder\\conf_matrix_' + str(est) + '.csv'
-    #convolution_mat.to_csv(savename, sep=';', decimal = '.')
 
-    # information about precision, recall, f1_score, and support:
-    # http://scikit-learn.org/stable/modules/generated/sklearn.metrics.precision_recall_fscore_support.html
-    #sklearn.metrics.precision_recall_fscore_support
     target_names = list()
     for name in range(1,(labels.size)+1):
         target_names.append(str(name))

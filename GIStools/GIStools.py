@@ -53,14 +53,16 @@ def calculate_roughness(input_DEM, output_roughness, verbose=False):
         roughness_dataset = None
         out_dataset = None
      
-    
-def clip_rasters_by_extent(target_raster_paths, template_raster_path, verbose=False):
+def clip_rasters_by_extent(clip_raster_paths, template_raster_path, verbose=False):
     """
     Clip a list of rasters by the extent of another raster and save the results.
 
     Parameters:
-    target_raster_paths (list of str): List of file paths to the rasters to be clipped.
+    clip_raster_paths (list of str): List of file paths to the rasters to be clipped.
     template_raster_path (str): File path to the raster whose extent will be used for clipping.
+    
+    Return:
+    clip_rasters (list): List of file paths to the clipped rasters.
     """
     # Open the template raster to get its bounds and transform
     with rasterio.open(template_raster_path) as template_raster:
@@ -68,8 +70,8 @@ def clip_rasters_by_extent(target_raster_paths, template_raster_path, verbose=Fa
 
     clip_rasters =[]
     # Process each target raster
-    for target_raster_path in target_raster_paths:
-        with rasterio.open(target_raster_path) as target_raster:
+    for clip_raster_path in clip_raster_paths:
+        with rasterio.open(clip_raster_path) as target_raster:
             # Calculate the window position and size in the target raster based on the template bounds
             window = from_bounds(*template_bounds, target_raster.transform)
 
@@ -89,7 +91,7 @@ def clip_rasters_by_extent(target_raster_paths, template_raster_path, verbose=Fa
             })
 
             # Generate the output path
-            output_path = target_raster_path.replace('.tif', '_clipped.tif')
+            output_path = clip_raster_path.replace('.tif', '_clipped.tif')
 
             # Save the clipped raster
             with rasterio.open(output_path, "w", **out_meta) as dest:
@@ -377,6 +379,8 @@ def match_dem_resolution(source_dem_path, target_dem_path, output_path, verbose 
 
     if verbose:
         print(f"Resampled DEM saved to: {output_path}")
+    return 
+
 
 def preprocess_SfM_inputs(shapefile_path, ortho_filepath, DEM_filepath, grid_ids, output_folder, verbose=False):
     """
@@ -457,10 +461,14 @@ def preprocess_SfM_inputs(shapefile_path, ortho_filepath, DEM_filepath, grid_ids
         processed_rgb = None
         rgb_bands = None
         rasters_to_stack = None
-
-        # Delete the working folder for the cureent grid ID
+        outputs[grid_id] = stacked_output
+        # Delete the working folder for the current grid ID
         shutil.rmtree(grid_output_folder)
-    return grid_ids
+        # delete temp_roughness.tif
+        os.remove('temp_roughness.tif')
+        print(f"Grid cell {grid_id} processed.")
+        print(f"Output saved to {stacked_output}")
+    return grid_ids, outputs
 
 
 def main():
@@ -470,8 +478,7 @@ def main():
     DEM_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test\Grid_Creation_Test\Full_DEM_Clipped_v1.tif"
     output_folder = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test\Grid_Creation_Test"
     grid_ids = [2]  # Choose grid IDs to process, or leave empty to process all grid cells
-    
-    preprocess_SfM_inputs(grid_path, ortho_path, DEM_path, grid_ids, output_folder)
+
 
     
 if __name__ == '__main__':

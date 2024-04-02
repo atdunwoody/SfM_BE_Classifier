@@ -155,7 +155,6 @@ def call_trim(folder, output, target_raster_path):
                 out_raster.write(src_data)
             print('Finished processing', filename)
 
-
 def pad_rasters_to_largest(source_rasters_folder, raster_dims = None, verbose = False, pad_value=0):
     """
     Pads each raster file in the source folder to match the width and height of the largest raster found.
@@ -230,7 +229,59 @@ def pad_rasters_to_largest(source_rasters_folder, raster_dims = None, verbose = 
 
         return raster_dims
 
-         
+def match_raster_dimensions(source_folder, target_raster_path, output_folder, pad_value=0):
+    """
+    Matches the dimensions of each raster in the source folder to the dimensions of the specified target raster.
+    This will either trim or pad the rasters in the source folder.
+
+    Parameters:
+    source_folder (str): The folder containing the rasters to be processed.
+    target_raster_path (str): The file path of the target raster whose dimensions will be used.
+    output_folder (str): The folder where the processed rasters will be saved.
+    pad_value (numeric): The value to use for padding smaller rasters. Defaults to 0.
+    """
+    # Ensure the output folder exists
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+
+    # Get target raster dimensions
+    with rasterio.open(target_raster_path) as target_raster:
+        target_width, target_height = target_raster.width, target_raster.height
+
+    # Process each source raster
+    for filename in os.listdir(source_folder):
+        file_path = os.path.join(source_folder, filename)
+        if file_path.lower().endswith('.tif'):
+            with rasterio.open(file_path) as src:
+                src_data = src.read()
+                src_meta = src.meta
+
+                # Check if the source raster is larger than the target and needs trimming
+                if src_meta['width'] > target_width or src_meta['height'] > target_height:
+                    trimmed_data = trim_raster(src_data, target_width, target_height)
+                    new_data = trimmed_data
+                # Else, check if it needs padding
+                elif src_meta['width'] < target_width or src_meta['height'] < target_height:
+                    pad_height = target_height - src_meta['height']
+                    pad_width = target_width - src_meta['width']
+                    padded_data = np.pad(src_data, ((0, 0), (0, pad_height), (0, pad_width)), 'constant', constant_values=pad_value)
+                    new_data = padded_data
+                else:
+                    # If the dimensions are already matching, just use the source data
+                    new_data = src_data
+
+                # Update metadata to match new dimensions
+                src_meta.update({
+                    'width': target_width,
+                    'height': target_height
+                })
+
+                # Write the processed raster
+                output_raster_path = os.path.join(output_folder, filename.replace('.tif', '_processed.tif'))
+                with rasterio.open(output_raster_path, 'w', **src_meta) as out_raster:
+                    out_raster.write(new_data)
+                print(f'Processed and saved {filename} to {output_raster_path}')
+      
 def main():
     folder = r"insert folder path here"
     
