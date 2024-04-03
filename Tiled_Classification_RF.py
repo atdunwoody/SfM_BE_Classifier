@@ -237,15 +237,18 @@ def train_RF(X, y, train_tile, results_txt, model_save_dir, est = 100, n_cores =
         from xgboost import XGBClassifier
         y = y - 1  # XGBoost requires class labels to start at 0
         rf = XGBClassifier(n_estimators=est, verbosity=verbose, n_jobs=n_cores)
+        X = np.nan_to_num(X)
+        rf2 = rf.fit(X, y)
     else:
         print('Training Random Forest Classifier')
         rf = RandomForestClassifier(n_estimators=est, oob_score=True, verbose=verbose, n_jobs=n_cores)
+        X = np.nan_to_num(X)
+        rf2 = rf.fit(X, y)
         print('--------------------------------', file=open(results_txt, "a"))
         print('TRAINING and RF Model Diagnostics:', file=open(results_txt, "a"))
-        print('OOB prediction of accuracy is: {oob}%'.format(oob=rf.oob_score_ * 100))
-        print('OOB prediction of accuracy is: {oob}%'.format(oob=rf.oob_score_ * 100), file=open(results_txt, "a"))
-    X = np.nan_to_num(X)
-    rf2 = rf.fit(X, y)
+        print('OOB prediction of accuracy is: {oob}%'.format(oob=rf2.oob_score_ * 100))
+        print('OOB prediction of accuracy is: {oob}%'.format(oob=rf2.oob_score_ * 100), file=open(results_txt, "a"))
+
 
     # Save the model to a file
     model_filename = os.path.join(model_save_dir, 'RF_Model.joblib')

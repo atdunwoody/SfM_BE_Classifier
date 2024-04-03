@@ -148,11 +148,26 @@ def apply_mask_and_multiply(source_raster_info, mask_raster_info):
 
 def save_clipped_raster(clipped_raster, output_path):
     """
-    Save clipped raster data to files in the specified output directory.
+    Save clipped raster data to a file in the specified output directory.
+    This function can handle both single-band and multi-band rasters.
     """
+    data = clipped_raster['data']
+    meta = clipped_raster['meta']
+
+    # Determine if the data is single-band or multi-band
+    if len(data.shape) == 2:  # Single-band raster
+        n_bands = 1
+        data = data[np.newaxis, :]  # Add a new axis to make it 3D for consistency
+    else:  # Multi-band raster
+        n_bands = data.shape[0]
+
+    # Update the metadata with the correct number of bands
+    meta.update(count=n_bands)
+
     # Write the clipped raster to a new file
-    with rasterio.open(output_path, "w", **clipped_raster['meta']) as dest:
-        dest.write(clipped_raster['data'], 1)
+    with rasterio.open(output_path, "w", **meta) as dest:
+        for band in range(1, n_bands + 1):
+            dest.write(data[band - 1, :, :], band)
 
     print(f"Clipped raster saved to {output_path}")
 
@@ -167,15 +182,25 @@ def mask_raster_by_classification(classification_raster_paths, source_raster_pat
     resampled_rasters = [match_dem_resolution(raster_info, clip_source_raster, verbose=True) for raster_info in clipped_rasters]
     mask_class_raster = binary_raster_from_classes(resampled_rasters, ids_to_mask)
     mask_DoD_raster = apply_mask_and_multiply(clip_source_raster, mask_class_raster)
+    #connvert 0 values to NaN
+    mask_DoD_raster['data'][mask_DoD_raster['data'] == 0] = np.nan
     # Save the processed rasters to the disk
     save_clipped_raster(mask_DoD_raster, output_path)
 
 def main():
-    classification_raster_paths = [r"Y:\ATD\GIS\East_Troublesome\RF Vegetation Filtering\LM2\LM2_2023___081222 - XGB Saved Model\RF_Results\Classified_Training_Image.tif",
-                               r"Y:\ATD\GIS\East_Troublesome\RF Vegetation Filtering\LM2\LM2_2023___070923 - XGB Saved Model\RF_Results\Classified_Training_Image.tif"]
-    source_raster_path = r"Y:\ATD\Drone Data Processing\Exports\East_Troublesome\LM2\LM2_2023 Exports\DoD\DoD __070923_ - __081222__clipped.tif"
-    output_path = r"Y:\ATD\GIS\East_Troublesome\RF Vegetation Filtering\LM2\Clipped_Rasters\DoD.tif"
-    ids_to_mask = [3, 4]
+    classification_raster_paths = [
+                                    r"Y:\ATD\Drone Data Processing\GIS Processing\Random_Forest_BE_Classification\LM2\07092023\RF_Results\Classification_Tile_29.tif",
+                                    r"Y:\ATD\Drone Data Processing\GIS Processing\Random_Forest_BE_Classification\LM2\08122022\RF_Results\Classification_Tile_29.tif"]
+    source_raster_path = r"Y:\ATD\Drone Data Processing\Exports\East_Troublesome\LM2\LM2_2023 Exports\LM2_2023____070923_PostError_PCFiltered_Ortho.tif"
 
-if __name__ == "main":
+    output_path = r"Y:\ATD\Drone Data Processing\GIS Processing\Random_Forest_BE_Classification\LM2\Ortho 070923 Clipped G29.tif"
+    ids_to_mask = [3, 4]
+    
+    raster_list = classification_raster_paths + [source_raster_path]
+    clipped_rasters = clip_rasters_by_extent(raster_list)
+    save_clipped_raster(clipped_rasters[-1], output_path)
+    
+if __name__ == "__main__":
     main()
+    # r"Y:\ATD\Drone Data Processing\GIS Processing\Random_Forest_BE_Classification\LM2\08122022\RF_Results\Classification_Tile_27.tif",
+    #r"Y:\ATD\Drone Data Processing\GIS Processing\Random_Forest_BE_Classification\LM2\07092023\RF_Results\Classification_Tile_27.tif",

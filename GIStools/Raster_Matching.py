@@ -283,7 +283,8 @@ def match_raster_dimensions(source_folder, target_raster_path, output_folder, pa
                 print(f'Processed and saved {filename} to {output_raster_path}')
       
 def main():
-    folder = r"insert folder path here"
+    input_folder = r"Y:\ATD\Drone Data Processing\GIS Processing\Random_Forest_BE_Classification\LM2\07092023\RF_Tiled_Inputs"
+    print_res(input_folder)
     
     
 if __name__ == "__main__":
