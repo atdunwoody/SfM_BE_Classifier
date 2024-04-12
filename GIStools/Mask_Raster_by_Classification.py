@@ -202,5 +202,4 @@ def main():
     
 if __name__ == "__main__":
     main()
-    # r"Y:\ATD\Drone Data Processing\GIS Processing\Random_Forest_BE_Classification\LM2\08122022\RF_Results\Classification_Tile_27.tif",
-    #r"Y:\ATD\Drone Data Processing\GIS Processing\Random_Forest_BE_Classification\LM2\07092023\RF_Results\Classification_Tile_27.tif",
+  

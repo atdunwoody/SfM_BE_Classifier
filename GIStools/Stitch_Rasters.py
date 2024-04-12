@@ -19,11 +19,12 @@ def stitch_rasters(in_dir, output_raster_path):
         # Open each raster and add it to the list
         
         for raster_path in raster_paths:
-            print("Trying to open raster: ", raster_path)
+            print("Opening raster: ", raster_path)
             src = rasterio.open(raster_path)
             raster_datasets.append(src)
 
         # Merge rasters
+        print("Merging rasters...")
         mosaic, out_trans = merge(raster_datasets)
 
         # Copy the metadata
@@ -37,6 +38,7 @@ def stitch_rasters(in_dir, output_raster_path):
             "transform": out_trans
         })
 
+        print("Writing mosaic raster to disk...")
         # Write the mosaic raster to disk
         with rasterio.open(output_raster_path, "w", **out_meta) as dest:
             dest.write(mosaic)
