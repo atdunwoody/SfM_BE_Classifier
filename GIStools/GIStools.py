@@ -379,7 +379,6 @@ def match_dem_resolution(source_dem_path, target_dem_path, output_path, verbose 
         print(f"Resampled DEM saved to: {output_path}")
     return 
 
-
 def preprocess_SfM_inputs(shapefile_path, ortho_filepath, DEM_filepath, grid_ids, output_folder, verbose=False):
     """
     Preprocess ortho and roughness data for specified grid cells for RF classification.

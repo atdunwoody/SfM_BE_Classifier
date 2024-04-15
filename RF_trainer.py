@@ -16,7 +16,6 @@ from GIStools.GIStools import preprocess_SfM_inputs
 from GIStools.Stitch_Rasters import stitch_rasters
 from GIStools.Grid_Creation import create_grid
 from GIStools.Raster_Matching import pad_rasters_to_largest
-from RF_input_parameters import TrainerParameters
 
 #-------------------Required User Defined Inputs-------------------#
 
@@ -69,7 +68,7 @@ def train_model(params):
     # Extract training data from shapefile
     X_train, y_train, labels, roi = TCRF.extract_shapefile_data(training_path, train_tile, train_tile_3Darray, results_txt, attribute, "TRAINING")
     #add 0 onto front of y-train and labels to account for 0 values in the classification
-    rf, rf2 = TCRF.train_RF(X_train, y_train, train_tile, results_txt, output_folder, est, n_cores, 
+    rf, rf2, model_path = TCRF.train_RF(X_train, y_train, train_tile, results_txt, output_folder, est, n_cores, 
                                 gradient_boosting = gradient_boosting, verbose = verbose) # train the random forest classifier
 
 
@@ -81,11 +80,11 @@ def train_model(params):
     X_v, y_v, labels_v, roi_v = TCRF.extract_shapefile_data(validation_path, train_tile, class_prediction, results_txt, attribute, "VALIDATION") 
     TCRF.model_evaluation(X_v, y_v, labels_v, roi_v, class_prediction, 
                         results_txt, gradient_boosting=gradient_boosting) # evaluate the model using the validation data
-
+    if params.model_path is None:
+        params.model_path = model_path
     del train_tile # close the image dataset
     
     def main():
-        params = TrainerParameters()
-        train_RF(params)
+        pass
     if __name__ == '__main__':
         main()

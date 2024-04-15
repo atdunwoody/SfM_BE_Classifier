@@ -284,7 +284,7 @@ def train_RF(X, y, train_tile, results_txt, model_save_dir, est = 100, n_cores =
     sn.heatmap(cm, annot=True, fmt='g')
     plt.xlabel('classes - predicted')
     plt.ylabel('classes - truth')
-    return rf, rf2
+    return rf, rf2, model_filename
 
 
 #-------------------PREDICTION ON TRAINING IMAGE-------------------#

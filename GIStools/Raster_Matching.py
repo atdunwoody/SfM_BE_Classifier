@@ -245,7 +245,8 @@ def match_raster_dimensions(source_folder, target_raster_path, output_folder, pa
     # Get target raster dimensions
     with rasterio.open(target_raster_path) as target_raster:
         target_width, target_height = target_raster.width, target_raster.height
-
+    processed_rasters = []
+    
     # Process each source raster
     for filename in os.listdir(source_folder):
         file_path = os.path.join(source_folder, filename)
@@ -279,7 +280,8 @@ def match_raster_dimensions(source_folder, target_raster_path, output_folder, pa
                 with rasterio.open(output_raster_path, 'w', **src_meta) as out_raster:
                     out_raster.write(new_data)
                 print(f'Processed and saved {filename} to {output_raster_path}')
-      
+                processed_rasters.append(output_raster_path)
+    return processed_rasters
 def main():
     input_folder = r"Y:\ATD\Drone Data Processing\GIS Processing\Random_Forest_BE_Classification\LM2\07092023\RF_Tiled_Inputs"
     print_res(input_folder)

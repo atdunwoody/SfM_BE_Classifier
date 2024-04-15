@@ -38,7 +38,7 @@ def classify_tiles(params):
         
     results_txt = os.path.join(output_folder, 'Results_Summary.txt') # directory, where the all meta results will be saved
     grid_ids_to_process = get_ids_to_process(params) # get the grid ids to process
-    params.classification_tile_paths = [] # list to store the paths of the classified tiles
+    params.classified_tile_paths = [] # list to store the paths of the classified tiles
     
     #===========================Main Classification Loop===========================#
     model = joblib.load(model_path)  # Load the saved model
@@ -53,8 +53,8 @@ def classify_tiles(params):
         masked_prediction = TCRF.reshape_and_mask_prediction(class_prediction, process_tile_3Darray) # mask the prediction to only include bare earth and vegetation
         TCRF.save_classification_image(classification_image, process_tile, process_tile_3Darray, masked_prediction) # save the masked classification image
         del process_tile # close the image dataset
-        params.classification_tile_paths.append(classification_image)
-        
+        params.classified_tile_paths.append(classification_image)
+    
 def main():
     from RF_input_parameters import RF_Parameters
     params = RF_Parameters().add_classifier_params()

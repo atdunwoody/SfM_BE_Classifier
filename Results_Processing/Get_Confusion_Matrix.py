@@ -8,6 +8,8 @@ gdal.AllRegister()
 from sklearn.metrics import confusion_matrix, precision_score, recall_score
 import pandas as pd # handling large data as table sheets
 from sklearn.metrics import classification_report, accuracy_score
+import seaborn as sns
+import matplotlib.pyplot as plt
 
 from osgeo import gdal, ogr
 import numpy as np
@@ -162,31 +164,48 @@ def compute_confusion_matrix(target_raster, classified_raster, results_txt):
     # Subset the classification image (ref_img) with the validation image (val_img)
     X_v = ref_img[val_img > 0]
     y_v = val_img[val_img > 0]
-
+    X_v = np.insert(X_v, 0, 0)
+    y_v = np.insert(y_v, 0, 0)
     # Print matrix sizes
     print('Our X matrix is sized: {sz}'.format(sz=X_v.shape), file=open(results_txt, "a"))
     print('Our y array is sized: {sz}'.format(sz=y_v.shape), file=open(results_txt, "a"))
 
     # Compute the confusion matrix
     convolution_mat = pd.crosstab(y_v, X_v, margins=True)
+    #Drop the last row and column of the confusion matrix
+    convolution_mat = convolution_mat.drop(convolution_mat.index[-1])
+    convolution_mat = convolution_mat.drop(convolution_mat.columns[-1], axis=1)
+    #Drop first row and column of the confusion matrix
+    convolution_mat = convolution_mat.drop(convolution_mat.index[0])
+    convolution_mat = convolution_mat.drop(convolution_mat.columns[0], axis=1)
     print(convolution_mat, file=open(results_txt, "a"))
 
     # Compute classification metrics
-    target_names = [str(i) for i in range(1, labels_v.size + 1)]
+    target_names = [str(i) for i in range(0, labels_v.size + 1)]
+    target_names = ['Unclassified', 'Veg', 'log', 'blog', 'BE', 'dBE', 'Water']
     sum_mat = classification_report(y_v, X_v, target_names=target_names)
+    #Drop first row of the sum matrix string
     print(sum_mat, file=open(results_txt, "a"))
 
     # Compute Overall Accuracy
     oaa = accuracy_score(y_v, X_v) * 100
     print('OAA = {} %'.format(oaa), file=open(results_txt, "a"))
 
+
+    # Plotting the heatmap
+    plt.figure(figsize=(10, 8))
+    sns.heatmap(convolution_mat, annot=True, fmt='d', cmap='inferno')
+    plt.title('Confusion Matrix Heatmap')
+    plt.xlabel('Predicted Labels')
+    plt.ylabel('True Labels')
+    plt.show()
     return convolution_mat, sum_mat, oaa
 
 
-shapefile = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Final Run\Second_Validation_Shapefile\Second_Validation.shp"
-classified_raster_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Final Run\Results\Second_Validation_Results\sieve_Validation_Image.tif"
-output_folder = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Final Run\Results\Second_Validation_Results\Sieve"
-results_txt = r"Sieved_Validation_Results.txt"
+shapefile = r"Y:\ATD\GIS\East_Troublesome\RF Vegetation Filtering\Train-val\Validation.shp"
+classified_raster_path = r"Y:\ATD\GIS\East_Troublesome\RF Vegetation Filtering\LM2 - 070923 - Full Run v3\RF_Results\SIeve_8_Classified_Tile_29.tif"
+output_folder = r"Y:\ATD\GIS\East_Troublesome\RF Vegetation Filtering\LM2 - 070923 - Full Run v3\RF_Results"
+results_txt = r"Validation_Results.txt"
 if not os.path.exists(output_folder):
     os.makedirs(output_folder)
 results_out  =  os.path.join(output_folder, results_txt)
@@ -199,4 +218,34 @@ raster, raster_array = extract_image_data(ref_raster, results_txt)
 
 target_raster = burn_shapefile_into_raster(shapefile, raster, output_folder, raster_array, results_txt, attribute)
 
-print(compute_confusion_matrix(target_raster, ref_raster, results_out))
+convolution_mat, sum_mat, oaa = compute_confusion_matrix(target_raster, ref_raster, results_out)
+
+def parse_classification_report(classification_summary):
+    # Split the summary string into lines
+    lines = classification_summary.split('\n')
+    
+    # Initialize an empty list to hold the parsed data
+    data = []
+    for line in lines[2:-5]:  # This skips the header and summary lines
+        row = [value for value in line.split() if value]
+        if row:
+            data.append(row)
+    
+    # Convert the list into a DataFrame
+    df = pd.DataFrame(data)
+    df.columns = ['Class', 'Precision', 'Recall', 'F1-Score', 'Support']
+    df = df.set_index('Class')
+    df[['Precision', 'Recall', 'F1-Score']] = df[['Precision', 'Recall', 'F1-Score']].astype(float)
+    df['Support'] = df['Support'].astype(int)
+    return df
+
+# Parse the classification report to a DataFrame
+df_classification_summary = parse_classification_report(sum_mat)
+
+# Plotting the heatmap for Precision, Recall, and F1-Score
+plt.figure(figsize=(10, 6))
+sns.heatmap(df_classification_summary[['Precision', 'Recall', 'F1-Score']], annot=True, fmt=".2f", cmap='inferno')
+plt.title('Classification Metrics Heatmap')
+plt.xlabel('Metrics')
+plt.ylabel('Classes')
+plt.show()
