@@ -102,7 +102,6 @@ def clip_rasters_by_extent(clip_raster_paths, template_raster_path, verbose=Fals
             clip_rasters.append(output_path)
     return clip_rasters
 
-
 def mask_rasters_by_shapefile(raster_paths, shapefile_path, output_folder, id_values, id_field='id', stack = False, verbose=False):
     """
     Mask a list of rasters by different polygons specified by id_values from a single shapefile. 
@@ -172,7 +171,6 @@ def mask_rasters_by_shapefile(raster_paths, shapefile_path, output_folder, id_va
         if stack:
             stack_bands(masked_rasters_for_id)
     return raster_outputs
-
 
 def split_bands(input_raster, output_prefix, output_path, pop=False):
     """

@@ -38,7 +38,6 @@ def print_res(folder_path):
             except Exception as e:
                 print(f"Error processing file {filename}: {e}")
                 
-
 def find_diff_rasters(folder_path, target_width, target_height):
     """
     Return a list of DEM files in a folder that have different dimensions than the target raster.
@@ -76,7 +75,6 @@ def find_diff_rasters(folder_path, target_width, target_height):
                 print(f"Error processing file {filename}: {e}")
 
     return different_dimension_files
-
 
 def find_largest_dimensions(rasters):
     """

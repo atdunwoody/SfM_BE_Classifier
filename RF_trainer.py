@@ -32,7 +32,6 @@ def train_model(params):
     n_cores = params.n_cores
     gradient_boosting = params.gradient_boosting
     verbose = params.verbose
-    stitch = params.stitch
 
     #--------------------Input Preparation-----------------------------#
     #Create output folder if it doesn't exist
