@@ -148,7 +148,46 @@ def create_grid(shapefile_paths, bounding_raster, output_folder, bounds_multipli
     
     return grid_id, output_path, cell_dim
 
+def create_matching_grid(grid_shp_path, raster_path, output_shp_path):
+    # Load the existing grid shapefile
+    grid = gpd.read_file(grid_shp_path)
+    
+    # Calculate the grid cell size from the existing grid
+    # Assuming the grid is regular and the first geometry is representative
+    first_cell = grid.geometry.iloc[0]
+    cell_width = first_cell.bounds[2] - first_cell.bounds[0]
+    cell_height = first_cell.bounds[3] - first_cell.bounds[1]
 
+    # Open the raster file to find its bounds
+    with rasterio.open(raster_path) as src:
+        bounds = src.bounds
+
+    # Calculate new bounds such that they extend to at least cover the raster
+    minx, miny, maxx, maxy = bounds
+    minx = minx - (minx % cell_width)
+    miny = miny - (miny % cell_height)
+    maxx = maxx + (cell_width - (maxx % cell_width)) % cell_width
+    maxy = maxy + (cell_height - (maxy % cell_height)) % cell_height
+
+    # Create the new grid cells
+    grid_cells = []
+    cell_id = []
+    id_counter = 0  # Initialize ID counter
+    y_start = miny
+    while y_start < maxy:
+        x_start = minx
+        while x_start < maxx:
+            grid_cells.append(box(x_start, y_start, x_start + cell_width, y_start + cell_height))
+            cell_id.append(id_counter)  # Assign an ID to each cell
+            id_counter += 1  # Increment I
+            x_start += cell_width
+        y_start += cell_height
+
+    # Create a new GeoDataFrame
+    new_grid = gpd.GeoDataFrame({'id': cell_id, 'geometry': grid_cells}, crs=grid.crs)
+
+    # Save to file
+    new_grid.to_file(output_shp_path)
 
 def main():
     # Example usage:
@@ -158,6 +197,10 @@ def main():
     first_vector_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Training-Validation Shapes\Archive\Training\Training.shp"
     second_vector_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Training-Validation Shapes\Archive\Validation\Validation.shp"  
     #EPSG_Code = '6342'  # Replace with EPSG code for shapefile CRS
+    old_grid = r"Y:\ATD\GIS\East_Troublesome\RF Vegetation Filtering\LM2\LM2 - 070923 - Full Run\RF_Tiled_Inputs\Grid\grid.shp"
+    new_raster = r"Y:\ATD\Drone Data Processing\Exports\East_Troublesome\LPM\LPM_Intersection_PA3_RMSE_018 Exports\LPM_Intersection_PA3_RMSE_018____LPM_070923_PostError_PCFiltered_DEM.tif"
+    new_grid = r"Y:\ATD\GIS\East_Troublesome\RF Vegetation Filtering\LPM\07092023 Initial Run\Grid\grid.shp"
+    create_matching_grid(old_grid, new_raster, new_grid)
     
     
 if __name__ == '__main__':

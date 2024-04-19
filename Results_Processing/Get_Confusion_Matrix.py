@@ -164,6 +164,8 @@ def compute_confusion_matrix(target_raster, classified_raster, results_txt):
     # Subset the classification image (ref_img) with the validation image (val_img)
     X_v = ref_img[val_img > 0]
     y_v = val_img[val_img > 0]
+    #drop all 0 values from the classification and validation arrays
+
     X_v = np.insert(X_v, 0, 0)
     y_v = np.insert(y_v, 0, 0)
     # Print matrix sizes
@@ -182,9 +184,11 @@ def compute_confusion_matrix(target_raster, classified_raster, results_txt):
 
     # Compute classification metrics
     target_names = [str(i) for i in range(0, labels_v.size + 1)]
-    target_names = ['Unclassified', 'Veg', 'log', 'blog', 'BE', 'dBE', 'Water']
+    target_names = ['Uncl.', 'Veg', 'Log', 'Burn_Log', 'BE', 'Water']
     sum_mat = classification_report(y_v, X_v, target_names=target_names)
     #Drop first row of the sum matrix string
+    sum_mat = sum_mat.split('\n', 1)[1]
+    target_names = ['Vegetation', 'Log', 'Burned Log', 'Bare Earth', 'Water']
     print(sum_mat, file=open(results_txt, "a"))
 
     # Compute Overall Accuracy
@@ -196,14 +200,20 @@ def compute_confusion_matrix(target_raster, classified_raster, results_txt):
     plt.figure(figsize=(10, 8))
     sns.heatmap(convolution_mat, annot=True, fmt='d', cmap='inferno')
     plt.title('Confusion Matrix Heatmap')
+    #add category labels to the heatmap and shift the labels to the center of the cell
+    plt.xticks(np.arange(len(target_names)) + 0.5, target_names)
+    plt.yticks(np.arange(len(target_names)) + 0.5, target_names, rotation=0)
     plt.xlabel('Predicted Labels')
     plt.ylabel('True Labels')
     plt.show()
     return convolution_mat, sum_mat, oaa
 
 
-shapefile = r"Y:\ATD\GIS\East_Troublesome\RF Vegetation Filtering\Train-val\Validation.shp"
-classified_raster_path = r"Y:\ATD\GIS\East_Troublesome\RF Vegetation Filtering\LM2 - 070923 - Full Run v3\RF_Results\SIeve_8_Classified_Tile_29.tif"
+#shapefile = r"Y:\ATD\GIS\East_Troublesome\RF Vegetation Filtering\Train-val\Validation.shp"
+#classified_raster_path = r"Y:\ATD\GIS\East_Troublesome\RF Vegetation Filtering\LM2 - 070923 - Full Run v3\RF_Results\SIeve_8_Classified_Tile_29.tif"
+shapefile = r"Y:\ATD\GIS\East_Troublesome\RF Vegetation Filtering\Train-val\Validation_Combined_BE.shp"
+classified_raster_path = r"Y:\ATD\GIS\East_Troublesome\RF Vegetation Filtering\Summary_4152024\Sieve_8_Combined_Classified_Tile_29.tif"
+
 output_folder = r"Y:\ATD\GIS\East_Troublesome\RF Vegetation Filtering\LM2 - 070923 - Full Run v3\RF_Results"
 results_txt = r"Validation_Results.txt"
 if not os.path.exists(output_folder):
@@ -219,6 +229,7 @@ raster, raster_array = extract_image_data(ref_raster, results_txt)
 target_raster = burn_shapefile_into_raster(shapefile, raster, output_folder, raster_array, results_txt, attribute)
 
 convolution_mat, sum_mat, oaa = compute_confusion_matrix(target_raster, ref_raster, results_out)
+#[1]: 
 
 def parse_classification_report(classification_summary):
     # Split the summary string into lines
@@ -234,6 +245,9 @@ def parse_classification_report(classification_summary):
     # Convert the list into a DataFrame
     df = pd.DataFrame(data)
     df.columns = ['Class', 'Precision', 'Recall', 'F1-Score', 'Support']
+    #make df class column = 'Vegetation', 'Log', 'Burned Log', 'Bare Earth', 'Water'
+    df['Class'] = ['Vegetation', 'Log', 'Burned Log', 'Bare Earth', 'Water']
+    
     df = df.set_index('Class')
     df[['Precision', 'Recall', 'F1-Score']] = df[['Precision', 'Recall', 'F1-Score']].astype(float)
     df['Support'] = df['Support'].astype(int)
@@ -246,6 +260,23 @@ df_classification_summary = parse_classification_report(sum_mat)
 plt.figure(figsize=(10, 6))
 sns.heatmap(df_classification_summary[['Precision', 'Recall', 'F1-Score']], annot=True, fmt=".2f", cmap='inferno')
 plt.title('Classification Metrics Heatmap')
-plt.xlabel('Metrics')
-plt.ylabel('Classes')
+plt.show()
+
+# Parse the classification report to a DataFrame
+df_classification_summary = parse_classification_report(sum_mat)
+
+# Set the style and palette using seaborn
+sns.set(style="whitegrid")
+palette = sns.color_palette("viridis", n_colors=3)  # Using viridis palette for aesthetics
+
+# Plotting the bar graph for Precision, Recall, and F1-Score using seaborn
+plt.figure(figsize=(10, 6))
+ax = sns.barplot(data=df_classification_summary[['Precision', 'Recall', 'F1-Score']].reset_index().melt(id_vars='Class'), 
+                 x='Class', y='value', hue='variable', palette=palette)
+plt.title('Land Cover Classification Metrics')
+plt.ylabel('Score')
+plt.xticks(rotation=0)
+plt.legend(title='Metrics')
+sns.despine()  # Remove the top and right spines
+
 plt.show()
