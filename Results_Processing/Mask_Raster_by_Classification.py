@@ -115,7 +115,7 @@ def binary_raster_from_classes(rasters_info, class_ids_to_keep):
     # Use the meta and transform of the first raster, assuming all rasters have the same spatial reference
     return {
         'data': binary_intersection,
-        'meta': rasters_info[0]['meta'],
+        'meta': rasters_info[0]['meta'].copy(),
         'transform': rasters_info[0]['transform']
     }
 
@@ -152,7 +152,7 @@ def save_clipped_raster(clipped_raster, output_path):
     This function can handle both single-band and multi-band rasters.
     """
     data = clipped_raster['data']
-    meta = clipped_raster['meta']
+    meta = clipped_raster['meta'].copy()  # Make a copy to avoid modifying the original
 
     # Determine if the data is single-band or multi-band
     if len(data.shape) == 2:  # Single-band raster
@@ -161,15 +161,24 @@ def save_clipped_raster(clipped_raster, output_path):
     else:  # Multi-band raster
         n_bands = data.shape[0]
 
-    # Update the metadata with the correct number of bands
-    meta.update(count=n_bands)
+    # Update the metadata with the correct number of bands and other essential information
+    meta['count'] = n_bands
+    if 'dtype' not in meta:
+        meta['dtype'] = data.dtype  # Set dtype in meta if not present
+    if 'driver' not in meta:
+        meta['driver'] = 'GTiff'  # Default to GeoTIFF driver if not specified
+
+    # Update dimensions to match data dimensions if they differ
+    if meta['width'] != data.shape[2] or meta['height'] != data.shape[1]:
+        meta['width'], meta['height'] = data.shape[2], data.shape[1]
 
     # Write the clipped raster to a new file
     with rasterio.open(output_path, "w", **meta) as dest:
         for band in range(1, n_bands + 1):
             dest.write(data[band - 1, :, :], band)
 
-    print(f"Clipped raster saved to {output_path}")
+    print(f"Raster saved successfully to {output_path}")
+
 
 def mask_raster_by_classification(classification_raster_paths, source_raster_path, output_path, ids_to_mask):
     classification_raster_paths.append(source_raster_path)

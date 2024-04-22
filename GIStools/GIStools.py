@@ -379,6 +379,16 @@ def match_dem_resolution(source_dem_path, target_dem_path, output_path, verbose 
         print(f"Resampled DEM saved to: {output_path}")
     return 
 
+def describe_raster(raster_path):
+    with rasterio.open(raster_path) as src:
+        band = src.read(4)
+        #count valid pixels
+        valid_pixels = np.count_nonzero(band)
+        #count total pixels
+        total_pixels = band.size
+        percent_valid = (valid_pixels/total_pixels) * 100
+        return percent_valid
+
 def preprocess_SfM_inputs(shapefile_path, ortho_filepath, DEM_filepath, grid_ids, output_folder, verbose=False):
     """
     Preprocess ortho and roughness data for specified grid cells for RF classification.
@@ -398,9 +408,9 @@ def preprocess_SfM_inputs(shapefile_path, ortho_filepath, DEM_filepath, grid_ids
     #Check if grid_id is empty, and if so, loop through all grid cells
     if not grid_ids:
         grid_ids = gpd.read_file(shapefile_path)['id'].tolist()
-    
+    invalid_grid_ids = []
     for grid_id in grid_ids:
-        # Step 1: Create a subfolder for each grid ID
+        # Step 1: Create a temporary subfolder for each grid ID
         grid_output_folder = os.path.join(output_folder, f'Grid_{grid_id}')
         Path(grid_output_folder).mkdir(parents=True, exist_ok=True)
         #Print update on progress using actual iteration number instead of grid_id
@@ -410,6 +420,13 @@ def preprocess_SfM_inputs(shapefile_path, ortho_filepath, DEM_filepath, grid_ids
         masked_rasters = mask_rasters_by_shapefile([ortho_filepath, DEM_filepath], shapefile_path, grid_output_folder, [grid_id], verbose=verbose)
         masked_ortho = masked_rasters[grid_id][0]  
         masked_DEM = masked_rasters[grid_id][1]  
+        
+        if describe_raster(masked_ortho) < 1:
+            print(f"Skipping grid cell {grid_id} due to lack of valid pixels in cell.")
+            invalid_grid_ids.append(grid_id)
+            shutil.rmtree(grid_output_folder)
+            #jump to next iteration
+            continue
         
         #Step 3: Create roughness raster
         roughness_path = os.path.join(grid_output_folder, 'roughness.tif')
@@ -465,6 +482,8 @@ def preprocess_SfM_inputs(shapefile_path, ortho_filepath, DEM_filepath, grid_ids
         os.remove('temp_roughness.tif')
         print(f"Grid cell {grid_id} processed.")
         print(f"Output saved to {stacked_output}")
+    
+    grid_ids = [grid_id for grid_id in grid_ids if grid_id not in invalid_grid_ids]
     return grid_ids, outputs
 
 

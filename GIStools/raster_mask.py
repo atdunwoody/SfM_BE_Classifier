@@ -14,7 +14,7 @@ import geopandas as gpd
 import numpy as np
 import rioxarray
 import xarray as xr
-
+import dask.array as da
 from raster_match import match_rasters
 
 def mask_raster_by_classification_raster(input_raster_path, mask_raster_path, output_raster_path=None, mask_values=None):
@@ -38,8 +38,8 @@ def mask_matched_rasters(input_raster_path, mask_raster_path, output_raster_path
     # Load input raster using rioxarray
     if type(input_raster_path) == str:
         try:
-            input_raster = rioxarray.open_rasterio(input_raster_path)
-            mask_raster = rioxarray.open_rasterio(mask_raster_path)
+            input_raster = rioxarray.open_rasterio(input_raster_path, chunks = 'auto')
+            mask_raster = rioxarray.open_rasterio(mask_raster_path, chunks = 'auto')
     # If the input raster is not a valid path, assume it is an rio/xarray DataArray
         except ValueError:
             raise ValueError("Input raster is not a valid rioxarray object or file path.")
@@ -62,7 +62,9 @@ def mask_matched_rasters(input_raster_path, mask_raster_path, output_raster_path
     
     # Apply the mask to the input raster
     input_raster = input_raster.where(mask, other=input_raster.rio.nodata)
+    # Set a specific no data value
     
+
     # Save the filtered raster using rioxarray
     print(f"Saving filtered raster to {output_raster_path}")
     input_raster.rio.to_raster(output_raster_path)
@@ -177,10 +179,40 @@ def mask_raster_values(raster_path, mask_values, replacement_values=0, output_ra
 
 
 def main():
-    input_raster_path = r"Y:\ATD\Drone Data Processing\Exports\East_Troublesome\LM2\LM2_2023 Exports\LM2_2023____070923_PostError_PCFiltered_DEM.tif"
-    mask_raster_path = r"Y:\ATD\GIS\East_Troublesome\RF Vegetation Filtering\LM2 - 070923 - Full Run v2\RF_Results\Classified_Tiles_Stitched.tif"
-    output_raster_path = r"Y:\ATD\Drone Data Processing\Exports\East_Troublesome\LM2\LM2_2023 Exports\LM2_2023____070923_PostError_PCFiltered_DEM_Veg_Masked.tif"
-    mask_values = [4 , 5, 6]
-    mask_raster_by_classification_raster(input_raster_path, mask_raster_path, output_raster_path, mask_values)
+    
+    mask_raster_paths = [r"Y:\ATD\GIS\East_Troublesome\RF Vegetation Filtering\LM2\LM2_070923\RF_Results\Stitched_Classification.tif",
+                         r"Y:\ATD\GIS\East_Troublesome\RF Vegetation Filtering\LM2\LM2_081222\RF_Results\Stitched_Classification.tif",
+                         r"Y:\ATD\GIS\East_Troublesome\RF Vegetation Filtering\LPM\LPM_081222\RF_Results\Stitched_Classification.tif",
+                         r"Y:\ATD\GIS\East_Troublesome\RF Vegetation Filtering\LPM\LPM_070923_5cm\RF_Results\Stitched_Classification.tif",
+                         r"Y:\ATD\GIS\East_Troublesome\RF Vegetation Filtering\MM\MM_090122\RF_Results\Stitched_Classification.tif",
+                         r"Y:\ATD\GIS\East_Troublesome\RF Vegetation Filtering\UM1_070923\RF_Results\Stitched_Classification.tif",
+                         r"Y:\ATD\GIS\East_Troublesome\RF Vegetation Filtering\UM2_070923\RF_Results\Stitched_Classification.tif",]
+    input_raster_path_dict = {
+                        # 'LM2_081222' : [mask_raster_paths[1], r"Y:\ATD\GIS\East_Troublesome\RF Vegetation Filtering\Input DEMs and Orthos\LM2_2023____081222_PostError_PCFiltered_DEM_5cm.tif"],
+                        # 'LM2_100622' : [mask_raster_paths[1], r"Y:\ATD\Drone Data Processing\Exports\East_Troublesome\LM2\LM2_2023 Exports\LM2_2023____100622_PostError_PCFiltered_DEM.tif"],
+                        # 'LPM_081222' : [mask_raster_paths[2], r"Y:\ATD\GIS\East_Troublesome\RF Vegetation Filtering\Input DEMs and Orthos\LPM_Intersection_PA3_RMSE_018____LPM_081222_PostError_PCFiltered_DEM_5cm.tif"],
+                        'MM_090122' : [mask_raster_paths[4], r"Y:\ATD\GIS\East_Troublesome\RF Vegetation Filtering\Input DEMs and Orthos\MM_all_102023_align60k_intersection_one_checked____MM_090122_PostError_PCFiltered_DEM_5cm.tif"],
+                        'MM_100622' : [mask_raster_paths[4], r"Y:\ATD\Drone Data Processing\Exports\East_Troublesome\MM\MM_all_102023_align60k_intersection_one_checked Exports\MM_all_102023_align60k_intersection_one_checked____MM_10__22_PostError_PCFiltered_DEM.tif"],
+     }
+    
+
+    output_directory = r"Y:\ATD\GIS\East_Troublesome\RF Vegetation Filtering\Vegetation Masked DEMs"
+    mask_values = [4 , 5]
+    for key, input_raster_paths in input_raster_path_dict.items():
+        
+        input_raster_path = input_raster_paths[1]
+        mask_raster_path = input_raster_paths[0]
+        output_raster_path = os.path.join(output_directory, key + '_5cm_veg_masked.tif')
+        #open rasters with rioxarray and chunking
+        if not os.path.exists(os.path.dirname(output_raster_path)):
+            os.makedirs(os.path.dirname(output_raster_path))
+        input_raster = rioxarray.open_rasterio(input_raster_path, chunks='auto')
+        mask_raster = rioxarray.open_rasterio(mask_raster_path, chunks='auto')
+        input_raster.rio.write_nodata(-32767.0, inplace=True)
+        mask_raster.rio.write_nodata(0, inplace=True)
+        
+        mask_raster_by_classification_raster(input_raster, mask_raster, output_raster_path, mask_values)
+    
+
 if __name__ == "__main__":  
     main()

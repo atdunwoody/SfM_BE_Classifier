@@ -31,13 +31,15 @@ def classify_tiles(params):
     results_folder = os.path.join(output_folder, 'RF_Results')
     if not os.path.exists(results_folder):
         os.makedirs(results_folder)
+    params.results_folder = results_folder
 
     classified_tile_folder = os.path.join(results_folder, 'Classified_Tiles')
     if not os.path.exists(classified_tile_folder):
         os.makedirs(classified_tile_folder)
-        
+    params.classified_tile_folder = classified_tile_folder
+    
     results_txt = os.path.join(output_folder, 'Results_Summary.txt') # directory, where the all meta results will be saved
-    grid_ids_to_process = get_ids_to_process(params) # get the grid ids to process
+    grid_ids_to_process, grid_path = get_ids_to_process(params) # get the grid ids to process
     params.classified_tile_paths = [] # list to store the paths of the classified tiles
     
     #===========================Main Classification Loop===========================#
@@ -55,6 +57,12 @@ def classify_tiles(params):
         del process_tile # close the image dataset
         params.classified_tile_paths.append(classification_image)
     
+    if stitch:
+        import GIStools.Stitch_Rasters as SR
+        stitched_image = os.path.join(results_folder, 'Stitched_Classification.tif')
+        SR.stitch_rasters(classified_tile_folder, stitched_image)
+        params.stitched_image = stitched_image
+        
 def main():
     from RF_input_parameters import RF_Parameters
     params = RF_Parameters().add_classifier_params()

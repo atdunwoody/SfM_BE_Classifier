@@ -4,3 +4,207 @@ Number of Bands: 1
 VALIDATION
 113888 validation pixels
 validation data include 5 classes: [1 2 3 4 6]
+Image extent: 4283 x 8991 (row x col)
+Number of Bands: 1
+------------------------------------
+VALIDATION
+113888 validation pixels
+validation data include 5 classes: [1 2 3 4 6]
+Image extent: 4283 x 8991 (row x col)
+Number of Bands: 1
+------------------------------------
+VALIDATION
+113888 validation pixels
+validation data include 5 classes: [1 2 3 4 5]
+Image extent: 4283 x 8991 (row x col)
+Number of Bands: 1
+------------------------------------
+VALIDATION
+113888 validation pixels
+validation data include 5 classes: [1 2 3 4 5]
+Image extent: 4283 x 8991 (row x col)
+Number of Bands: 1
+------------------------------------
+VALIDATION
+113888 validation pixels
+validation data include 5 classes: [1 2 3 4 5]
+Image extent: 4283 x 8991 (row x col)
+Number of Bands: 1
+------------------------------------
+VALIDATION
+113888 validation pixels
+validation data include 5 classes: [1 2 3 4 5]
+Image extent: 4283 x 8991 (row x col)
+Number of Bands: 1
+------------------------------------
+VALIDATION
+113888 validation pixels
+validation data include 5 classes: [1 2 3 4 5]
+Image extent: 4283 x 8991 (row x col)
+Number of Bands: 1
+------------------------------------
+VALIDATION
+113888 validation pixels
+validation data include 5 classes: [1 2 3 4 5]
+Image extent: 4283 x 8991 (row x col)
+Number of Bands: 1
+------------------------------------
+VALIDATION
+113888 validation pixels
+validation data include 5 classes: [1 2 3 4 5]
+Image extent: 4283 x 8991 (row x col)
+Number of Bands: 1
+------------------------------------
+VALIDATION
+113888 validation pixels
+validation data include 5 classes: [1 2 3 4 5]
+Image extent: 9077 x 8159 (row x col)
+Number of Bands: 1
+------------------------------------
+VALIDATION
+72640 validation pixels
+validation data include 5 classes: [1 2 3 4 5]
+Image extent: 4284 x 8991 (row x col)
+Number of Bands: 1
+------------------------------------
+VALIDATION
+113888 validation pixels
+validation data include 5 classes: [1 2 3 4 5]
+Image extent: 4284 x 8991 (row x col)
+Number of Bands: 1
+------------------------------------
+VALIDATION
+113888 validation pixels
+validation data include 5 classes: [1 2 3 4 5]
+Image extent: 4284 x 8991 (row x col)
+Number of Bands: 1
+------------------------------------
+VALIDATION
+113888 validation pixels
+validation data include 5 classes: [1 2 3 4 5]
+Image extent: 4284 x 8991 (row x col)
+Number of Bands: 1
+------------------------------------
+VALIDATION
+113888 validation pixels
+validation data include 5 classes: [1 2 3 4 5]
+Image extent: 4284 x 8991 (row x col)
+Number of Bands: 1
+------------------------------------
+VALIDATION
+113888 validation pixels
+validation data include 5 classes: [1 2 3 4 5]
+Image extent: 4284 x 8991 (row x col)
+Number of Bands: 1
+------------------------------------
+VALIDATION
+113888 validation pixels
+validation data include 5 classes: [1 2 3 4 5]
+Image extent: 4284 x 8991 (row x col)
+Number of Bands: 1
+------------------------------------
+VALIDATION
+113888 validation pixels
+validation data include 5 classes: [1 2 3 4 5]
+Image extent: 4284 x 8991 (row x col)
+Number of Bands: 1
+------------------------------------
+VALIDATION
+113888 validation pixels
+validation data include 5 classes: [1 2 3 4 5]
+Image extent: 856 x 1798 (row x col)
+Number of Bands: 1
+------------------------------------
+VALIDATION
+5604 validation pixels
+validation data include 5 classes: [1 2 3 4 5]
+Image extent: 4284 x 8991 (row x col)
+Number of Bands: 1
+------------------------------------
+VALIDATION
+113888 validation pixels
+validation data include 5 classes: [1 2 3 4 5]
+Image extent: 856 x 1798 (row x col)
+Number of Bands: 1
+------------------------------------
+VALIDATION
+5604 validation pixels
+validation data include 5 classes: [1 2 3 4 5]
+Image extent: 571 x 1198 (row x col)
+Number of Bands: 1
+------------------------------------
+VALIDATION
+2799 validation pixels
+validation data include 5 classes: [1 2 3 4 5]
+Image extent: 428 x 899 (row x col)
+Number of Bands: 1
+------------------------------------
+VALIDATION
+1745 validation pixels
+validation data include 5 classes: [1 2 3 4 5]
+Image extent: 286 x 600 (row x col)
+Number of Bands: 1
+------------------------------------
+VALIDATION
+956 validation pixels
+validation data include 5 classes: [1 2 3 4 5]
+Image extent: 4284 x 8991 (row x col)
+Number of Bands: 1
+------------------------------------
+VALIDATION
+113888 validation pixels
+validation data include 5 classes: [1 2 3 4 5]
+Image extent: 856 x 1798 (row x col)
+Number of Bands: 1
+------------------------------------
+VALIDATION
+5604 validation pixels
+validation data include 5 classes: [1 2 3 4 5]
+Image extent: 571 x 1198 (row x col)
+Number of Bands: 1
+------------------------------------
+VALIDATION
+2799 validation pixels
+validation data include 5 classes: [1 2 3 4 5]
+Image extent: 428 x 899 (row x col)
+Number of Bands: 1
+------------------------------------
+VALIDATION
+1745 validation pixels
+validation data include 5 classes: [1 2 3 4 5]
+Image extent: 286 x 600 (row x col)
+Number of Bands: 1
+------------------------------------
+VALIDATION
+956 validation pixels
+validation data include 5 classes: [1 2 3 4 5]
+Image extent: 4284 x 8991 (row x col)
+Number of Bands: 1
+------------------------------------
+VALIDATION
+113888 validation pixels
+validation data include 5 classes: [1 2 3 4 5]
+Image extent: 856 x 1798 (row x col)
+Number of Bands: 1
+------------------------------------
+VALIDATION
+5604 validation pixels
+validation data include 5 classes: [1 2 3 4 5]
+Image extent: 571 x 1198 (row x col)
+Number of Bands: 1
+------------------------------------
+VALIDATION
+2799 validation pixels
+validation data include 5 classes: [1 2 3 4 5]
+Image extent: 428 x 899 (row x col)
+Number of Bands: 1
+------------------------------------
+VALIDATION
+1745 validation pixels
+validation data include 5 classes: [1 2 3 4 5]
+Image extent: 286 x 600 (row x col)
+Number of Bands: 1
+------------------------------------
+VALIDATION
+956 validation pixels
+validation data include 5 classes: [1 2 3 4 5]

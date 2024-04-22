@@ -1,19 +1,29 @@
+import os
+
 class RF_Parameters:
     def __init__(self):
         # Basic shared parameters
-        self.DEM_path = r"Y:\ATD\Drone Data Processing\Exports\East_Troublesome\LPM\LPM_Intersection_PA3_RMSE_018 Exports\LPM_Intersection_PA3_RMSE_018____LPM_070923_PostError_PCFiltered_DEM.tif"
-        self.ortho_path = r"Y:\ATD\Drone Data Processing\Exports\East_Troublesome\LPM\LPM_Intersection_PA3_RMSE_018 Exports\LPM_Intersection_PA3_RMSE_018____LPM_070923_PostError_PCFiltered_Ortho.tif"
-        self.output_folder = r"Y:\ATD\GIS\East_Troublesome\RF Vegetation Filtering\LPM\07092023 Initial Run"
+        self.DEM_path = r"Y:\ATD\Drone Data Processing\Exports\East_Troublesome\MM\MM_all_102023_align60k_intersection_one_checked Exports\MM_all_102023_align60k_intersection_one_checked____MM_070923_PostError_PCFiltered_DEM_5cm.tif"
+        self.ortho_path = r"Y:\ATD\Drone Data Processing\Exports\East_Troublesome\MM\MM_all_102023_align60k_intersection_one_checked Exports\MM_all_102023_align60k_intersection_one_checked____MM_070923_PostError_PCFiltered_Ortho_5cm.tif"       
+        self.output_folder = r"Y:\ATD\GIS\East_Troublesome\RF Vegetation Filtering\MM\07092023 5cm"
         self.tile_dir = None  # Directory for storing/sourcing tiles. If None, uses the output folder.
-        self.training_path = r"Y:\ATD\GIS\East_Troublesome\RF Vegetation Filtering\LM2 - 070923 - Water added expanded v2\Train-val\Training.shp"
-        self.validation_path = r"Y:\ATD\GIS\East_Troublesome\RF Vegetation Filtering\LM2 - 070923 - Water added\Train-val\Validation.shp"
-        self.attribute = 'FID'
+        self.training_path = r"Y:\ATD\GIS\East_Troublesome\RF Vegetation Filtering\LM2\Train-val\Training.shp"
+        self.validation_path = r"Y:\ATD\GIS\East_Troublesome\RF Vegetation Filtering\LM2\Train-val\Validation.shp"
+        self.attribute = 'id'
         self.BE_values = [4, 5]  # List of values to keep when masking.
-        self.grid_ids_to_process = [45]  # List of grid ids to process. If empty, all grids will be processed.
-        self.grid_path = r"Y:\ATD\GIS\East_Troublesome\RF Vegetation Filtering\LPM\07092023 Initial Run\Grid\grid.shp"
+        self.grid_ids_to_process = []  # List of grid ids to process. If empty, all grids will be processed.
+        self.grid_path = r"Y:\ATD\GIS\East_Troublesome\RF Vegetation Filtering\MM\Grid\grid.shp"
+        self.create_matching_grid = True
         self.verbose = True
         self.stitch = True
-
+        
+        if not os.path.exists(self.output_folder):
+            os.makedirs(self.output_folder)
+        self.add_tile_creator_params()
+        self.add_trainer_params()
+        self.add_classifier_params()
+        self.record_params()
+    
     def add_tile_creator_params(self):
         self.standardize_rasters = False
         return self
@@ -27,7 +37,18 @@ class RF_Parameters:
         return self
 
     def add_classifier_params(self):
-        self.model_path = r"Y:\ATD\GIS\East_Troublesome\RF Vegetation Filtering\LM2\LM2 - 070923 - Full Run v4\RF_Model.joblib"
+        self.model_path = r"Y:\ATD\GIS\East_Troublesome\RF Vegetation Filtering\Resolution_Test\5_cm\RF_Model.joblib"
         #self.model_path = None
         self.process_training_only = False
         return self
+    
+    def record_params(self):
+        print(f"Recording parameters to {os.path.join(self.output_folder, 'RF_parameters.txt')}...")
+        with open(os.path.join(self.output_folder, 'RF_parameters.txt'), 'w') as f:
+            params_dict = self.__dict__
+            for key in params_dict:
+                f.write(f"{key}: {params_dict[key]}\n")
+        return self
+    
+    def __repr__(self) -> str:
+        return str(self.__dict__)
