@@ -186,15 +186,18 @@ def main():
                          r"Y:\ATD\GIS\East_Troublesome\RF Vegetation Filtering\LPM\LPM_070923_5cm\RF_Results\Stitched_Classification.tif",
                          r"Y:\ATD\GIS\East_Troublesome\RF Vegetation Filtering\MM\MM_090122\RF_Results\Stitched_Classification.tif",
                          r"Y:\ATD\GIS\East_Troublesome\RF Vegetation Filtering\UM1_070923\RF_Results\Stitched_Classification.tif",
-                         r"Y:\ATD\GIS\East_Troublesome\RF Vegetation Filtering\UM2_070923\RF_Results\Stitched_Classification.tif",]
+                         r"Y:\ATD\GIS\East_Troublesome\RF Vegetation Filtering\UM2_070923\RF_Results\Stitched_Classification.tif",
+                         r"Y:\ATD\GIS\East_Troublesome\RF Vegetation Filtering\UM1\UM1_090822\RF_Results\Stitched_Classification.tif",
+                         r"Y:\ATD\GIS\East_Troublesome\RF Vegetation Filtering\UM2\UM2_071922\RF_Results\Stitched_Classification.tif"]
     input_raster_path_dict = {
                         # 'LM2_081222' : [mask_raster_paths[1], r"Y:\ATD\GIS\East_Troublesome\RF Vegetation Filtering\Input DEMs and Orthos\LM2_2023____081222_PostError_PCFiltered_DEM_5cm.tif"],
                         # 'LM2_100622' : [mask_raster_paths[1], r"Y:\ATD\Drone Data Processing\Exports\East_Troublesome\LM2\LM2_2023 Exports\LM2_2023____100622_PostError_PCFiltered_DEM.tif"],
                         # 'LPM_081222' : [mask_raster_paths[2], r"Y:\ATD\GIS\East_Troublesome\RF Vegetation Filtering\Input DEMs and Orthos\LPM_Intersection_PA3_RMSE_018____LPM_081222_PostError_PCFiltered_DEM_5cm.tif"],
-                        'MM_090122' : [mask_raster_paths[4], r"Y:\ATD\GIS\East_Troublesome\RF Vegetation Filtering\Input DEMs and Orthos\MM_all_102023_align60k_intersection_one_checked____MM_090122_PostError_PCFiltered_DEM_5cm.tif"],
-                        'MM_100622' : [mask_raster_paths[4], r"Y:\ATD\Drone Data Processing\Exports\East_Troublesome\MM\MM_all_102023_align60k_intersection_one_checked Exports\MM_all_102023_align60k_intersection_one_checked____MM_10__22_PostError_PCFiltered_DEM.tif"],
+                        'LM2_070923' : [mask_raster_paths[0], r"Y:\ATD\Drone Data Processing\Exports\East_Troublesome\LM2\LM2_2023 Exports\LM2_2023____070923_PostError_PCFiltered_DEM.tif"],
+                        'LM2_102123' : [mask_raster_paths[0], r"Y:\ATD\Drone Data Processing\Exports\East_Troublesome\LM2\LM2_2023 Exports\LM2_2023____102123_PostError_PCFiltered_DEM.tif"],
      }
     
+
 
     output_directory = r"Y:\ATD\GIS\East_Troublesome\RF Vegetation Filtering\Vegetation Masked DEMs"
     mask_values = [4 , 5]
