@@ -9,13 +9,15 @@ class RF_Parameters:
         self.tile_dir = None  # Directory for storing/sourcing tiles. If None, uses the output folder.
         self.training_path = r"Y:\ATD\GIS\East_Troublesome\RF Vegetation Filtering\LM2\Train-val\Training.shp"
         self.validation_path = r"Y:\ATD\GIS\East_Troublesome\RF Vegetation Filtering\LM2\Train-val\Validation.shp"
-        self.attribute = 'id'
+        self.attribute = 'id' # field in shapefile that indicates whether the polygon is vegetation or not
         self.BE_values = [4, 5]  # List of values to keep when masking.
-        self.grid_ids_to_process = []  # List of grid ids to process. If empty, all grids will be processed.
+        # Very large raster files will be tiled into smaller rasters for processing. 
+        # A grid is overlain on the raster and each grid cell is processed as a separate tile.
         self.grid_path = r"Y:\ATD\GIS\East_Troublesome\RF Vegetation Filtering\MM\Grid\grid.shp"
+        self.grid_ids_to_process = []  # List of grid ids to process. If empty, all grids will be processed.
         self.create_matching_grid = True
         self.verbose = True
-        self.stitch = True
+        self.stitch = True # If True, output tiles will be stitched together to create a single raster.
         
         if not os.path.exists(self.output_folder):
             os.makedirs(self.output_folder)

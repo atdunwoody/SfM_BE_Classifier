@@ -102,7 +102,7 @@ def clip_rasters_by_extent(clip_raster_paths, template_raster_path, verbose=Fals
             clip_rasters.append(output_path)
     return clip_rasters
 
-def mask_rasters_by_shapefile(raster_paths, shapefile_path, output_folder, id_values, id_field='id', stack = False, verbose=False):
+def mask_rasters_by_shapefile(raster_paths, shapefile_path, output_folder, id_field='id', id_values = None, stack = False, verbose=False):
     """
     Mask a list of rasters by different polygons specified by id_values from a single shapefile. 
     Entire bounds of shapefile will not be used, only the portions of the raster within bounds of the polygons with the specified id_values will be retained.
@@ -123,7 +123,10 @@ def mask_rasters_by_shapefile(raster_paths, shapefile_path, output_folder, id_va
 
     # Read the shapefile
     gdf = gpd.read_file(shapefile_path)
-    
+    #print columns in gdf
+    print(gdf.columns)
+    #process all unqiue geometries if id_values is not provided
+        
     raster_outputs = {}
     for id_value in id_values:
         shapes = gdf[gdf[id_field] == id_value]
@@ -314,7 +317,7 @@ def processRGB(RGB_Path, verbose = False):
     B_array = b_dataset.ReadAsArray().astype(np.float32) / 255
 
     # Process entire image
-    EGI_array = np.multiply(G_array, 3) - 1
+    EGI_array = 2 * G_array - (R_array + B_array)
     Saturation_array = 1 - np.min(np.array([R_array, G_array, B_array]), axis=0)
 
     # Write entire image to output
@@ -495,7 +498,20 @@ def main():
     output_folder = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test\Grid_Creation_Test"
     grid_ids = [2]  # Choose grid IDs to process, or leave empty to process all grid cells
 
-
+    raster_paths = [
+    r"Y:\ATD\Drone Data Processing\Metashape_Processing\BlueLake_JoeWright\240723 Blue Lake\Exports\072024-matched.tif",
+    r"Y:\ATD\Drone Data Processing\Metashape_Processing\BlueLake_JoeWright\240723 Blue Lake\Exports\082021-matched.tif"
+    ]
+    
+    shp_paths = [
+        r"Y:\ATD\Drone Data Processing\Metashape_Processing\BlueLake_JoeWright\240723 Blue Lake\Exports\stable_ground_single.gpkg",
+        r"Y:\ATD\Drone Data Processing\Metashape_Processing\BlueLake_JoeWright\240723 Blue Lake\Exports\stable_ground_single.gpkg"
+    ]
+    output_directory = os.path.join(os.path.dirname(raster_paths[0]), "Masked")
+    if not os.path.exists(output_directory):
+        os.makedirs(output_directory)
+    for raster_path, shp_path in zip(raster_paths, shp_paths):
+        mask_rasters_by_shapefile([raster_path], shp_path, output_directory, id_field='fid', verbose=True)
     
 if __name__ == '__main__':
     main()
