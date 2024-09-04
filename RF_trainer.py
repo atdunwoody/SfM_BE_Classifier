@@ -67,6 +67,11 @@ def train_model(params):
     train_tile, train_tile_3Darray = TCRF.extract_image_data(train_tile_path, results_txt, est, log=True) # extract the training tile image data
     # Extract training data from shapefile
     X_train, y_train, labels, roi = TCRF.extract_shapefile_data(training_path, train_tile, train_tile_3Darray, results_txt, attribute, "TRAINING")
+    print("Length of X_train: ", len(X_train))
+    print("Size of X_train: ", X_train.shape)
+    print("Length of y_train: ", len(y_train))
+    print("Size of y_train: ", y_train.shape)
+    
     #add 0 onto front of y-train and labels to account for 0 values in the classification
     rf, rf2, model_path = TCRF.train_RF(X_train, y_train, train_tile, results_txt, output_folder, est, n_cores, 
                                 gradient_boosting = gradient_boosting, verbose = verbose) # train the random forest classifier

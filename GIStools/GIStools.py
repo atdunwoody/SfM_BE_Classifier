@@ -392,12 +392,12 @@ def describe_raster(raster_path):
         percent_valid = (valid_pixels/total_pixels) * 100
         return percent_valid
 
-def preprocess_SfM_inputs(shapefile_path, ortho_filepath, DEM_filepath, grid_ids, output_folder, verbose=False):
+def preprocess_SfM_inputs(grid_path, ortho_filepath, DEM_filepath, grid_ids, output_folder, verbose=False):
     """
     Preprocess ortho and roughness data for specified grid cells for RF classification.
 
     Parameters:
-    shapefile_path (str): Filepath to the shapefile with grid indices.
+    grid_path (str): Filepath to the shapefile with grid indices.
     ortho_filepath (str): Filepath to the entire extent orthomosaic.
     roughness_filepath (str): Filepath to the entire extent roughness raster.
     grid_ids (list of int): List of IDs of the grid cells to process.
@@ -410,7 +410,8 @@ def preprocess_SfM_inputs(shapefile_path, ortho_filepath, DEM_filepath, grid_ids
 
     #Check if grid_id is empty, and if so, loop through all grid cells
     if not grid_ids:
-        grid_ids = gpd.read_file(shapefile_path)['id'].tolist()
+        grid_ids = gpd.read_file(grid_path)['id'].tolist()
+    print(f"Grid IDs to process: {grid_ids}")
     invalid_grid_ids = []
     for grid_id in grid_ids:
         # Step 1: Create a temporary subfolder for each grid ID
@@ -420,7 +421,7 @@ def preprocess_SfM_inputs(shapefile_path, ortho_filepath, DEM_filepath, grid_ids
         print(f"Processing grid cell {grid_ids.index(grid_id) + 1} of {len(grid_ids)}")
         
         # Step 2: Mask ortho and roughness rasters by shapefile
-        masked_rasters = mask_rasters_by_shapefile([ortho_filepath, DEM_filepath], shapefile_path, grid_output_folder, [grid_id], verbose=verbose)
+        masked_rasters = mask_rasters_by_shapefile([ortho_filepath, DEM_filepath], grid_path, grid_output_folder, id_values=[grid_id], verbose=verbose)
         masked_ortho = masked_rasters[grid_id][0]  
         masked_DEM = masked_rasters[grid_id][1]  
         

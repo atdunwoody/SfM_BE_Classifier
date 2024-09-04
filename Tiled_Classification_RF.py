@@ -23,7 +23,7 @@ Last Updated: 1/5/2024
 
 
 import os, tempfile
-from osgeo import gdal, ogr, gdal_array # I/O image data
+from osgeo import gdal, osr, ogr, gdal_array # I/O image data
 import numpy as np # math and array handling
 import matplotlib.pyplot as plt # plot figures
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier # machine learning classifiers
@@ -31,8 +31,10 @@ import pandas as pd # handling large data as table sheets
 from sklearn.metrics import classification_report, accuracy_score,confusion_matrix  # calculating measures for accuracy assessment
 from joblib import dump, load
 import seaborn as sn
-
+import sklearn
+import joblib
 import datetime
+
 
 # Tell GDAL to throw Python exceptions, and register all drivers
 gdal.UseExceptions()
@@ -129,45 +131,111 @@ def print_header_params(results_txt, params):
     print('-------------------------------------------------', file=open(results_txt, "a"))
 
 #-------------------IMAGE DATA EXTRACTION-------------------#
+
+
 def extract_image_data(raster_path, results_txt, est=None, log=False):
     print('Extracting image data from: {}'.format(raster_path))
     raster = gdal.Open(raster_path, gdal.GA_ReadOnly)
+    
+    # Check if the raster has a projection
+    projection = raster.GetProjection()
+    if not projection:
+        print("Raster projection missing. Setting correct projection.")
+        
+        # Define the projection (example for NAD83(2011) / UTM zone 13N - EPSG:6342)
+        srs = osr.SpatialReference()
+        srs.ImportFromEPSG(6342)  # You can replace this EPSG code with your desired projection
+        raster.SetProjection(srs.ExportToWkt())
+        
+        # Save the raster with the new projection
+        driver = gdal.GetDriverByName('GTiff')
+        temp_file_with_proj = raster_path.replace(".tif", "_with_proj.tif")
+        new_raster = driver.CreateCopy(temp_file_with_proj, raster, 0)
+        new_raster.FlushCache()  # Ensure the new file is saved
+        print(f"Projection set and new raster saved at: {temp_file_with_proj}")
+    else:
+        print(f"Raster projection: {projection}")
 
+    # Create a temporary memory-mapped file to store the raster data
     temp_file = tempfile.NamedTemporaryFile(delete=False)
     filename = temp_file.name
     temp_file.close()  # Close the file so np.memmap can use it
 
-    raster_3Darray = np.memmap(filename, dtype=gdal_array.GDALTypeCodeToNumericTypeCode(raster.GetRasterBand(1).DataType),
+    # Load the raster into a 3D array
+    raster_3Darray = np.memmap(filename, 
+                dtype=gdal_array.GDALTypeCodeToNumericTypeCode(raster.GetRasterBand(1).DataType),
                 mode='w+', shape=(raster.RasterYSize, raster.RasterXSize, raster.RasterCount))
+    
     for b in range(raster_3Darray.shape[2]):
         raster_3Darray[:, :, b] = raster.GetRasterBand(b + 1).ReadAsArray()
 
-    
+    # Extract image details
     row = raster.RasterYSize
     col = raster.RasterXSize
     band_number = raster.RasterCount
 
-
+    # Log image details if logging is enabled
     if log:
         print('Image extent: {} x {} (row x col)'.format(row, col))
         print('Number of Bands: {}'.format(band_number))
 
+        with open(results_txt, "a") as f:
+            f.write('Image extent: {} x {} (row x col)\n'.format(row, col))
+            f.write('Number of Bands: {}\n'.format(band_number))
+            f.write('---------------------------------------\n')
+            f.write('TRAINING\n')
+            f.write('Number of Trees: {}\n'.format(est))
 
-        print('Image extent: {} x {} (row x col)'.format(row, col), file=open(results_txt, "a"))
-        print('Number of Bands: {}'.format(band_number), file=open(results_txt, "a"))
-        print('---------------------------------------', file=open(results_txt, "a"))
-        print('TRAINING', file=open(results_txt, "a"))
-        print('Number of Trees: {}'.format(est), file=open(results_txt, "a"))
     return raster, raster_3Darray
 
 #-------------------TRAINING DATA EXTRACTION FROM SHAPEFILE-------------------#
 
 def extract_shapefile_data(shapefile, raster, raster_array, results_txt, attribute, header):
+    
+    # Subfunction to reproject shapefile to match raster projection
+    def reproject_shapefile(shapefile_layer, raster_srs):
+        source_srs = shapefile_layer.GetSpatialRef()
+        if not source_srs.IsSame(raster_srs):
+            print("Shapefile and raster projections do not match. Reprojecting shapefile to match raster.")
+            target_srs = osr.SpatialReference()
+            target_srs.ImportFromWkt(raster_srs.ExportToWkt())
+            
+            # Create a coordinate transformation
+            coord_transform = osr.CoordinateTransformation(source_srs, target_srs)
+            
+            # Create a memory layer to store the reprojected features
+            mem_driver = ogr.GetDriverByName('MEMORY')
+            mem_datasource = mem_driver.CreateDataSource('')
+            mem_layer = mem_datasource.CreateLayer('', target_srs, geom_type=shapefile_layer.GetGeomType())
+            
+            # Copy fields from original layer
+            mem_layer.CreateFields(shapefile_layer.schema)
+            
+            # Reproject each feature and add it to the new layer
+            for feature in shapefile_layer:
+                geom = feature.GetGeometryRef()
+                geom.Transform(coord_transform)
+                new_feature = ogr.Feature(mem_layer.GetLayerDefn())
+                new_feature.SetGeometry(geom)
+                for i in range(feature.GetFieldCount()):
+                    new_feature.SetField(i, feature.GetField(i))
+                mem_layer.CreateFeature(new_feature)
+            return mem_layer
+        else:
+            print("Shapefile and raster projections match.")
+            return shapefile_layer
 
     # Subfunction to extract data from a shapefile
     def extract_from_shapefile(shapefile, raster, raster_array):
         shape_dataset = ogr.Open(shapefile)
         shape_layer = shape_dataset.GetLayer()
+
+        # Get raster projection
+        raster_srs = osr.SpatialReference()
+        raster_srs.ImportFromWkt(raster.GetProjection())
+        
+        # Check and reproject shapefile if necessary
+        shape_layer = reproject_shapefile(shape_layer, raster_srs)
 
         mem_drv = gdal.GetDriverByName('MEM')
         mem_raster = mem_drv.Create('', raster.RasterXSize, raster.RasterYSize, 1, gdal.GDT_UInt16)
@@ -178,9 +246,11 @@ def extract_shapefile_data(shapefile, raster, raster_array, results_txt, attribu
         mem_band.SetNoDataValue(0)
 
         att_ = 'ATTRIBUTE=' + attribute
+        print(f"Rasterizing with attribute: {att_}")
+
         err = gdal.RasterizeLayer(mem_raster, [1], shape_layer, None, None, [1], [att_, "ALL_TOUCHED=TRUE"])
         assert err == gdal.CE_None
-
+        
         roi = mem_raster.ReadAsArray()
         try:
             X = raster_array[roi > 0, :]
@@ -189,9 +259,12 @@ def extract_shapefile_data(shapefile, raster, raster_array, results_txt, attribu
         y = roi[roi > 0]
         n_samples = (roi > 0).sum()
         labels = np.unique(roi[roi > 0])
-        print(f"Unique labels values: {labels}")
-        print(f"Unique y values: {np.unique(y)}")
+
         return X, y, labels, n_samples, roi
+
+    # Call the extraction subfunction
+    X, y, labels, n_samples, roi = extract_from_shapefile(shapefile, raster, raster_array)
+
     
     # Subfunction to print information
     def print_info(n_samples, labels, X, y, results_txt, header):
@@ -252,7 +325,29 @@ def train_RF(X, y, train_tile, results_txt, model_save_dir, est = 100, n_cores =
 
     # Save the model to a file
     model_filename = os.path.join(model_save_dir, 'RF_Model.joblib')
-    dump(rf2, model_filename)
+    import json
+
+    # Save model with metadata
+    def save_model_with_metadata(model, model_save_dir):
+        model_filename = os.path.join(model_save_dir, 'RF_Model.joblib')
+        joblib.dump(model, model_filename)
+        
+        # Save metadata
+        metadata = {
+            'scikit_learn_version': sklearn.__version__,
+            'model_type': type(model).__name__,
+            'important_notes': 'This model was trained with specific assumptions about input data.'
+        }
+        metadata_filename = os.path.join(model_save_dir, 'RF_Model_metadata.json')
+        with open(metadata_filename, 'w') as f:
+            json.dump(metadata, f)
+        
+        print(f"Model saved to {model_filename}")
+        print(f"Metadata saved to {metadata_filename}")
+
+    # Call this in your `train_RF` function
+    save_model_with_metadata(rf2, model_save_dir)
+    
     print(f"Model saved to {model_filename}")
     
     # Show band importance:
