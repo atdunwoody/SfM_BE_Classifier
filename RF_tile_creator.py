@@ -53,7 +53,7 @@ def get_ids_to_process(params):
     #Each grid cell is the size of the extent training and validation shapefiles
     #check if grid_ids_to_process is empty
     if len(params.grid_ids_to_process) == 0:
-        if params.create_matching_grid:
+        if params.create_matching_grid and params.grid_path is not None:
             out_grid_path = os.path.join(params.output_folder, 'Grid')
             if not os.path.exists(out_grid_path):
                 os.makedirs(out_grid_path)

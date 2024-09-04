@@ -1,10 +1,10 @@
 #Setting GDAL_DATA environment variable, change the path to your own GDAL_DATA folder
 import os
-gdal_data_path = 'C:/ProgramData/miniconda3/envs/GIStools/Library/share/gdal'
-os.environ['GDAL_DATA'] = gdal_data_path
+# gdal_data_path = 'C:/ProgramData/miniconda3/envs/GIStools/Library/share/gdal'
+# os.environ['GDAL_DATA'] = gdal_data_path
 from osgeo import gdal, gdal_array
-gdal.UseExceptions()
-gdal.AllRegister()
+# gdal.UseExceptions()
+# gdal.AllRegister()
 
 from pathlib import Path
 import shutil

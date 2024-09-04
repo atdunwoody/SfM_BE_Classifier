@@ -190,7 +190,6 @@ def create_matching_grid(grid_shp_path, raster_path, output_shp_path):
     new_grid.to_file(output_shp_path)
 
 def main():
-    # Example usage:
     output_path = r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test\Grid_Creation_Test"  # Update with the desired output path
     template_raster_path =  r"Z:\ATD\Drone Data Processing\GIS Processing\Vegetation Filtering Test\Random_Forest\Streamline_Test\Grid_Creation_Test\Full_DEM_Clipped.tif"
     #Use the function with your specific cell_bounds and bounding_raster
