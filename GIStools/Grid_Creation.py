@@ -140,8 +140,8 @@ def create_grid(shapefile_paths, bounding_raster, output_folder, bounds_multipli
         # Save the grid to a shapefile
         grid.to_file(output_path)
     except Exception as e:
-        print(f"Failed to save the grid shapefile: {e}")
-        return None, None
+        raise Exception(f"Failed to save grid to {output_path}: {e}")
+        
 
     grid_id = find_grid_id(cell_bounds, output_path)
     cell_dim = (grid_width, grid_height)

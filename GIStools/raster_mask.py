@@ -180,37 +180,36 @@ def mask_raster_values(raster_path, mask_values, replacement_values=0, output_ra
 
 def main():
     
-    raster_paths = [
-       r"Y:\ATD\Drone Data Processing\Metashape_Processing\BlueLake_JoeWright\240723 Blue Lake\Exports\072024-matched.tif",
-        r"Y:\ATD\Drone Data Processing\Metashape_Processing\BlueLake_JoeWright\240723 Blue Lake\Exports\082021-matched.tif"
-    ]
+    # raster_paths = [
+    #    r"Y:\ATD\Drone Data Processing\Metashape_Processing\BlueLake_JoeWright\240723 Blue Lake\Exports\072024-matched.tif",
+    #     r"Y:\ATD\Drone Data Processing\Metashape_Processing\BlueLake_JoeWright\240723 Blue Lake\Exports\082021-matched.tif"
+    # ]
     
-    shp_paths = [
-        r"Y:\ATD\Drone Data Processing\Metashape_Processing\BlueLake_JoeWright\240723 Blue Lake\Exports\stable_ground_single.gpkg",
-        r"Y:\ATD\Drone Data Processing\Metashape_Processing\BlueLake_JoeWright\240723 Blue Lake\Exports\stable_ground_single.gpkg"
-    ]
-    output_directory = os.path.join(os.path.dirname(raster_paths[0]), "Masked")
-    if not os.path.exists(output_directory):
-        os.makedirs(output_directory)
-    for raster_path, shp_path in zip(raster_paths, shp_paths):
-        mask_tif_by_shp([raster_path], shp_path, output_directory)
+    # shp_paths = [
+    #     r"Y:\ATD\Drone Data Processing\Metashape_Processing\BlueLake_JoeWright\240723 Blue Lake\Exports\stable_ground_single.gpkg",
+    #     r"Y:\ATD\Drone Data Processing\Metashape_Processing\BlueLake_JoeWright\240723 Blue Lake\Exports\stable_ground_single.gpkg"
+    # ]
+    # output_directory = os.path.join(os.path.dirname(raster_paths[0]), "Masked")
+    # if not os.path.exists(output_directory):
+    #     os.makedirs(output_directory)
+    # for raster_path, shp_path in zip(raster_paths, shp_paths):
+    #     mask_tif_by_shp([raster_path], shp_path, output_directory)
     
     mask_raster_paths = [
-        # r"Y:\ATD\GIS\East_Troublesome\RF Vegetation Filtering\LM2\LM2_070923\RF_Results\Stitched_Classification.tif",
+        r"Y:\ATD\GIS\Veg Classification MS vs RF\MS Exports\062022_RF\RF_Results\Stitched_Classification.tif",
+        r"Y:\ATD\GIS\Veg Classification MS vs RF\MS Exports\062023_RF\RF_Results\Stitched_Classification.tif"
     ]
-    input_raster_path_dict = {
-                        # 'LM2_081222' : [mask_raster_paths[1], r"Y:\ATD\GIS\East_Troublesome\RF Vegetation Filtering\Input DEMs and Orthos\LM2_2023____081222_PostError_PCFiltered_DEM_5cm.tif"],
-                     
-     }
+    input_raster_paths = [
+           r"Y:\ATD\GIS\Veg Classification MS vs RF\MS Exports\DEM_0_062022_PostError_PCFiltered_Veg_filt.tif",
+            r"Y:\ATD\GIS\Veg Classification MS vs RF\MS Exports\DEM_1_062023_PostError_PCFiltered_Veg_Filt.tif",           
+     ]
     
-
-    output_directory = r"Y:\ATD\GIS\East_Troublesome\RF Vegetation Filtering\Vegetation Masked DEMs"
-    mask_values = [4 , 5]
-    for key, input_raster_paths in input_raster_path_dict.items():
-        
-        input_raster_path = input_raster_paths[1]
-        mask_raster_path = input_raster_paths[0]
-        output_raster_path = os.path.join(output_directory, key + '_5cm_veg_masked.tif')
+    output_directory = r"Y:\ATD\GIS\Veg Classification MS vs RF\MS Exports"
+    mask_values = [4 , 5, 6]
+    
+    for mask_raster_path, input_raster_path in zip(mask_raster_paths, input_raster_paths):
+        input_raster_name = os.path.basename(input_raster_path)
+        output_raster_path = os.path.join(output_directory, "RF_Masked_" + input_raster_name)
         #open rasters with rioxarray and chunking
         if not os.path.exists(os.path.dirname(output_raster_path)):
             os.makedirs(os.path.dirname(output_raster_path))
