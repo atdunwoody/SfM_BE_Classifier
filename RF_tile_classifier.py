@@ -48,7 +48,11 @@ def classify_tiles(params):
         print(f"\nProcessing grid {grid_id}")
         classification_image = os.path.join(classified_tile_folder, f"Classification_Tile_{grid_id}.tif")
         process_tile_path = os.path.join(in_dir, f"stacked_bands_tile_input_{grid_id}.tif") # path to the tile to be classified
-        
+        # Check if the tile exists
+        if os.path.exists(classification_image):
+            print(f"Classification image already exists for grid {grid_id}. Skipping...")
+            params.classified_tile_paths.append(classification_image)
+            continue
         process_tile, process_tile_3Darray = TCRF.extract_image_data(process_tile_path, results_txt, log=True) # extract the training tile image data
         process_tile_2Darray = TCRF.flatten_raster_bands(process_tile_3Darray) # Convert NaNs to 0.0 and reshape the 3D array to 2D array
         class_prediction = TCRF.predict_classification(model, process_tile_2Darray, process_tile_3Darray) # predict the classification for each pixel using the trained model

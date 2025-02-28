@@ -133,8 +133,8 @@ def match_rasters(src_array, ref_array, output_raster_dir=None, mask_no_data = T
         
     if output_raster_dir is not None:
         os.makedirs(output_raster_dir, exist_ok=True)
-        warped_input_path = os.path.join(output_raster_dir, f"{os.path.basename(src_array.name)}_warped.tif")
-        warped_reference_path = os.path.join(output_raster_dir, f"{os.path.basename(ref_array.name)}_warped.tif")
+        warped_input_path = os.path.join(output_raster_dir, f"{src_array.name}_warped.tif")
+        warped_reference_path = os.path.join(output_raster_dir, f"{ref_array.name}_warped.tif")
         warped_input.rio.to_raster(warped_input_path)
         print(f"Input raster warped and saved to {warped_input_path}.")
         warped_reference.rio.to_raster(warped_reference_path)
@@ -144,3 +144,17 @@ def match_rasters(src_array, ref_array, output_raster_dir=None, mask_no_data = T
     else:
         print("Input raster warped successfully.")
         return warped_input, warped_reference
+
+
+if __name__ == "__main__":
+    src_raster_path = r"Y:\ATD\GIS\Bennett\DEMs\LIDAR\OT 2021\dem 2021 bennett clip.tif"
+    ref_raster_path = r"Y:\ATD\GIS\Bennett\DEMs\SfM\Veg Masked\UTM\UM 062023 0.2m DEM veg masked.tif"
+    output_dir = r"Y:\ATD\GIS\Bennett\DoDs\Aligned DoDs\LIDAR_Alignment\Vegetation Masked\UM"
+    
+    os.makedirs(output_dir, exist_ok=True)
+    src_raster = open_raster_with_dask(src_raster_path)
+    ref_raster = open_raster_with_dask(ref_raster_path)
+    src_raster.name = os.path.basename(src_raster_path).replace(".tif", "")
+    ref_raster.name = os.path.basename(ref_raster_path).replace(".tif", "")
+    warped_src, warped_ref, warped_src_path, warped_ref_path = match_rasters(src_raster, ref_raster, output_dir)
+    print("Raster matching complete.")

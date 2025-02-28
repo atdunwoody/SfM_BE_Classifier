@@ -11,7 +11,7 @@ from GIStools.Raster_Matching import pad_rasters_to_largest
 from GIStools.Raster_Augmentation import standarize_multi_band_rasters
 
 
-def create_tiles(params):
+def create_tiles(params, load_tiles = False):
     #-------------------Required User Defined Inputs-------------------#
     #params = TileCreatorParameters()
 
@@ -37,18 +37,24 @@ def create_tiles(params):
     if not os.path.exists(in_dir):
         os.makedirs(in_dir)
     #==================== Preprocessing ====================#
+    if not load_tiles:
+        grid_ids_to_process, grid_path = get_ids_to_process(params)
+        #Bands output from preprocess function: Roughness, R, G, B, Saturation, Excessive Green Index
+        grid_ids, tiled_raster_paths = preprocess_SfM_inputs(grid_path, ortho_path, DEM_path, grid_ids_to_process, in_dir, verbose=verbose) #Prepare input stacked rasters for random forest classification
+        params.grid_ids_to_process = grid_ids
+        print(f"Grid IDs returned from preprocess_SfM_inputs: {grid_ids}")
+        if standardize_rasters:
+            standarized_rasters = standarize_multi_band_rasters(tiled_raster_paths) #Standarize rasters for random forest classification
 
-    grid_ids_to_process, grid_path = get_ids_to_process(params)
-    #Bands output from preprocess function: Roughness, R, G, B, Saturation, Excessive Green Index
-    grid_ids, tiled_raster_paths = preprocess_SfM_inputs(grid_path, ortho_path, DEM_path, grid_ids_to_process, in_dir, verbose=verbose) #Prepare input stacked rasters for random forest classification
-    params.grid_ids_to_process = grid_ids
-    print(f"Grid IDs returned from preprocess_SfM_inputs: {grid_ids}")
-    if standardize_rasters:
-        standarized_rasters = standarize_multi_band_rasters(tiled_raster_paths) #Standarize rasters for random forest classification
+        #Ensure all rasters are the same size by padding smaller rasters with 0s. Having raster tiles of identical sizes is required for random forest classification
+        raster_dims = pad_rasters_to_largest(in_dir, verbose=verbose)
 
-    #Ensure all rasters are the same size by padding smaller rasters with 0s. Having raster tiles of identical sizes is required for random forest classification
-    raster_dims = pad_rasters_to_largest(in_dir, verbose=verbose)
-
+    else:
+        tiles = [os.path.join(in_dir, f) for f in os.listdir(in_dir) if f.endswith('.tif')]
+        grid_ids = [int(f.split('_')[-1].split('.')[0]) for f in tiles]
+        params.grid_ids_to_process = grid_ids
+        print(f"Grid IDs returned from preprocess_SfM_inputs: {grid_ids}")
+    
 def get_ids_to_process(params):
     #Each grid cell is the size of the extent training and validation shapefiles
     #check if grid_ids_to_process is empty

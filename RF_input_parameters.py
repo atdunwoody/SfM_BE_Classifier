@@ -6,7 +6,7 @@ class RF_Parameters:
         self.DEM_path = None
         self.ortho_path = None  
 
-        self.output_folder = r"Y:\ATD\GIS\ETF\Vegetation Filtering\MPM"
+        self.output_folder = r"Y:\ATD\GIS\Bennett\Vegetation Filtering\ME"
         self.tile_dir = None # Directory for storing/sourcing tiles. If None, uses the output folder.
         self.model_path = r"Y:\ATD\GIS\ETF\Vegetation Filtering\Model\RF_Model.joblib"
         self.training_path = None

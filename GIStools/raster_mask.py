@@ -16,12 +16,13 @@ import rioxarray
 import xarray as xr
 import dask.array as da
 from raster_match import match_rasters
+from rasterio.enums import Resampling
 
 def mask_raster_by_classification_raster(input_raster_path, mask_raster_path, output_raster_path=None, mask_values=None):
-    cropped_src, cropped_mask = match_rasters(input_raster_path, mask_raster_path)
-    mask_matched_rasters(cropped_src, cropped_mask, output_raster_path=output_raster_path, mask_values=mask_values)
+    cropped_mask, cropped_raster = match_rasters(mask_raster_path, input_raster_path)
+    mask_rasters(cropped_raster, cropped_mask, output_raster_path=output_raster_path, mask_values=mask_values)
 
-def mask_matched_rasters(input_raster_path, mask_raster_path, output_raster_path=None, mask_values=None):
+def mask_rasters(input_raster_path, mask_raster_path, output_raster_path=None, mask_values=None):
     """
     Filters an input raster by a mask raster, retaining values from the input raster
     where the corresponding mask raster pixel is one of the specified mask values.
@@ -180,45 +181,42 @@ def mask_raster_values(raster_path, mask_values, replacement_values=0, output_ra
 
 def main():
     
-    # raster_paths = [
-    #    r"Y:\ATD\Drone Data Processing\Metashape_Processing\BlueLake_JoeWright\240723 Blue Lake\Exports\072024-matched.tif",
-    #     r"Y:\ATD\Drone Data Processing\Metashape_Processing\BlueLake_JoeWright\240723 Blue Lake\Exports\082021-matched.tif"
-    # ]
-    
-    # shp_paths = [
-    #     r"Y:\ATD\Drone Data Processing\Metashape_Processing\BlueLake_JoeWright\240723 Blue Lake\Exports\stable_ground_single.gpkg",
-    #     r"Y:\ATD\Drone Data Processing\Metashape_Processing\BlueLake_JoeWright\240723 Blue Lake\Exports\stable_ground_single.gpkg"
-    # ]
-    # output_directory = os.path.join(os.path.dirname(raster_paths[0]), "Masked")
-    # if not os.path.exists(output_directory):
-    #     os.makedirs(output_directory)
-    # for raster_path, shp_path in zip(raster_paths, shp_paths):
-    #     mask_tif_by_shp([raster_path], shp_path, output_directory)
-    
     mask_raster_paths = [
-        r"Y:\ATD\GIS\Veg Classification MS vs RF\MS Exports\062022_RF\RF_Results\Stitched_Classification.tif",
-        r"Y:\ATD\GIS\Veg Classification MS vs RF\MS Exports\062023_RF\RF_Results\Stitched_Classification.tif"
+        r"Y:\ATD\GIS\Bennett\Vegetation Filtering\0_Veg Classifications 2022-2023\ME 052022 Classification.tif",
+        r"Y:\ATD\GIS\Bennett\Vegetation Filtering\0_Veg Classifications 2022-2023\MW 052022 Classification.tif",
+
     ]
     input_raster_paths = [
-           r"Y:\ATD\GIS\Veg Classification MS vs RF\MS Exports\DEM_0_062022_PostError_PCFiltered_Veg_filt.tif",
-            r"Y:\ATD\GIS\Veg Classification MS vs RF\MS Exports\DEM_1_062023_PostError_PCFiltered_Veg_Filt.tif",           
+        r"Y:\ATD\GIS\Bennett\DEMs\SfM\ME 052022 DEM.tif",
+        r"Y:\ATD\GIS\Bennett\DEMs\SfM\MW 052022 DEM.tif",
+    
      ]
     
-    output_directory = r"Y:\ATD\GIS\Veg Classification MS vs RF\MS Exports"
-    mask_values = [4 , 5, 6]
+    output_directory = r"Y:\ATD\GIS\Bennett\DEMs\SfM\BE DEMs"
+    mask_values = [4, 5] # Mask out all pixels with a value of 1 in the mask raster
     
     for mask_raster_path, input_raster_path in zip(mask_raster_paths, input_raster_paths):
         input_raster_name = os.path.basename(input_raster_path)
-        output_raster_path = os.path.join(output_directory, "RF_Masked_" + input_raster_name)
+        output_raster_path = os.path.join(output_directory, input_raster_name.replace(".tif", " veg masked.tif"))
         #open rasters with rioxarray and chunking
         if not os.path.exists(os.path.dirname(output_raster_path)):
             os.makedirs(os.path.dirname(output_raster_path))
         input_raster = rioxarray.open_rasterio(input_raster_path, chunks='auto')
         mask_raster = rioxarray.open_rasterio(mask_raster_path, chunks='auto')
-        input_raster.rio.write_nodata(-32767.0, inplace=True)
-        mask_raster.rio.write_nodata(0, inplace=True)
+        print("Downsampling rasters to 0.2m resolution...")
         
-        mask_raster_by_classification_raster(input_raster, mask_raster, output_raster_path, mask_values)
+        input_raster_downsampled  = input_raster.rio.reproject(
+            # CRS remains the same; specify if changing
+            input_raster.rio.crs,
+            # Define the new resolution
+            resolution=0.2,
+            # Choose the resampling method
+            resampling=Resampling.bilinear
+        )
+
+        mask_raster_downsampled = mask_raster.rio.reproject_match(input_raster_downsampled)
+        
+        mask_raster_by_classification_raster(input_raster_downsampled, mask_raster_downsampled, output_raster_path, mask_values)
     
 
 if __name__ == "__main__":  

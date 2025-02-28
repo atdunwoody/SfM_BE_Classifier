@@ -418,6 +418,12 @@ def preprocess_SfM_inputs(grid_path, ortho_filepath, DEM_filepath, grid_ids, out
         grid_output_folder = os.path.join(output_folder, f'Grid_{grid_id}')
         Path(grid_output_folder).mkdir(parents=True, exist_ok=True)
         #Print update on progress using actual iteration number instead of grid_id
+        
+        stacked_output = os.path.join(output_folder, f"stacked_bands_tile_input_{grid_id}.tif")
+        print(f"Stacked output: {stacked_output}")
+        if os.path.exists(stacked_output):
+            print(f"Skipping grid cell {grid_id} as output already exists.")
+            continue
         print(f"Processing grid cell {grid_ids.index(grid_id) + 1} of {len(grid_ids)}")
         
         # Step 2: Mask ortho and roughness rasters by shapefile
