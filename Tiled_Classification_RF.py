@@ -165,6 +165,8 @@ def extract_image_data(raster_path, results_txt, est=None, log=False):
     raster_3Darray = np.memmap(filename, 
                 dtype=gdal_array.GDALTypeCodeToNumericTypeCode(raster.GetRasterBand(1).DataType),
                 mode='w+', shape=(raster.RasterYSize, raster.RasterXSize, raster.RasterCount))
+
+    
     
     for b in range(raster_3Darray.shape[2]):
         raster_3Darray[:, :, b] = raster.GetRasterBand(b + 1).ReadAsArray()

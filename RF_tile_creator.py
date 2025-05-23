@@ -35,7 +35,7 @@ def create_tiles(params, load_tiles = False):
     else:
         in_dir = params.tile_dir
     if not os.path.exists(in_dir):
-        os.makedirs(in_dir)
+        os.makedirs(in_dir) 
     #==================== Preprocessing ====================#
     if not load_tiles:
         grid_ids_to_process, grid_path = get_ids_to_process(params)

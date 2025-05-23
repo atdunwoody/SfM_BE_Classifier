@@ -286,4 +286,4 @@ dependencies:
       - tblib==3.0.0
       - toolz==0.12.0
       - zict==3.0.0
-prefix: C:\ProgramData\miniconda3\envs\GIStools
+
