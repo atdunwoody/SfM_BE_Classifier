@@ -21,7 +21,8 @@ Creating training and validation shapefiles:
 Clone this GitHub repository, or download the entire repository to your local machine. Do not move any of the files within the repository, as this may cause the workflow to break.
 Create a virtual environment called `SfM_RF` in miniconda3 by opening the Anaconda Prompt and installing the `environment_PC.yml` file:
 
-`conda env create -n SfM_classifier -f environment_PC.yml`\n
+`conda env create -n SfM_classifier -f environment_PC.yml`
+
 `conda activate SfM_classifier`
 
 # Example Outputs
