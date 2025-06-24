@@ -12,7 +12,7 @@ class RF_Parameters:
         self.training_path = r"Y:\ATD\GIS\ETF\Vegetation Filtering\Training-Validation Shapes\LM2 Train-val\Training.shp"
         self.validation_path = r"Y:\ATD\GIS\ETF\Vegetation Filtering\Training-Validation Shapes\LM2 Train-val\Validation.shp"
         self.attribute = 'id' # field in shapefile that indicates whether the polygon is vegetation or not
-        self.BE_values = [2, 3]  # List of values to keep when masking.
+        self.BE_values = [2, 3]  # List of values to keep when masking.   
         
         ############################### GRID PATH ##################################
         # Very large raster files will be tiled into smaller rasters for processing. 
